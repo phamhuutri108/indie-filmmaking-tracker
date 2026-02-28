@@ -2575,76 +2575,344 @@ var getAssetFromKV = /* @__PURE__ */ __name2(async (event, options) => {
 }, "getAssetFromKV");
 
 // src/workers/scraper.ts
-async function fetchRssFeed(url) {
-  const response = await fetch(url, {
-    headers: { "User-Agent": "IFT-Bot/1.0 (Indie Filmmaking Tracker)" }
-  });
-  if (!response.ok) {
-    throw new Error(`RSS fetch failed: ${response.status} ${url}`);
-  }
-  const xml = await response.text();
-  return parseRss(xml);
-}
-__name(fetchRssFeed, "fetchRssFeed");
-function parseRss(xml) {
-  const items = [];
-  const itemRegex = /<item>([\s\S]*?)<\/item>/g;
-  let match2;
-  while ((match2 = itemRegex.exec(xml)) !== null) {
-    const block = match2[1];
-    items.push({
-      guid: extractTag(block, "guid") || extractTag(block, "link") || "",
-      title: stripCdata(extractTag(block, "title") || ""),
-      link: extractTag(block, "link") || "",
-      pubDate: extractTag(block, "pubDate") || "",
-      content: stripCdata(
-        extractTag(block, "content:encoded") || extractTag(block, "description") || ""
-      )
-    });
-  }
-  return items;
-}
-__name(parseRss, "parseRss");
+var MONTH_MAP = {
+  january: "01",
+  february: "02",
+  march: "03",
+  april: "04",
+  may: "05",
+  june: "06",
+  july: "07",
+  august: "08",
+  september: "09",
+  october: "10",
+  november: "11",
+  december: "12"
+};
+var COUNTRY_TAG_MAP = {
+  korea: "South Korea",
+  southkorea: "South Korea",
+  japan: "Japan",
+  india: "India",
+  china: "China",
+  taiwan: "Taiwan",
+  indonesia: "Indonesia",
+  philippines: "Philippines",
+  vietnam: "Vietnam",
+  thailand: "Thailand",
+  singapore: "Singapore",
+  malaysia: "Malaysia",
+  hongkong: "Hong Kong",
+  bangladesh: "Bangladesh",
+  pakistan: "Pakistan",
+  srilanka: "Sri Lanka",
+  nepal: "Nepal",
+  myanmar: "Myanmar",
+  cambodia: "Cambodia",
+  laos: "Laos",
+  mongolia: "Mongolia",
+  kazakhstan: "Kazakhstan"
+};
+var ASIAN_FILM_FESTIVALS_FEED = "https://asianfilmfestivals.com/feed";
 function extractTag(xml, tag) {
   const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i");
   const match2 = xml.match(regex);
   return match2 ? match2[1].trim() : null;
 }
 __name(extractTag, "extractTag");
+function extractAllTags(xml, tag) {
+  const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "gi");
+  const results = [];
+  let m;
+  while ((m = regex.exec(xml)) !== null) results.push(m[1].trim());
+  return results;
+}
+__name(extractAllTags, "extractAllTags");
 function stripCdata(str) {
   return str.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").trim();
 }
 __name(stripCdata, "stripCdata");
+function stripHtml(html) {
+  return html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&nbsp;/g, " ").replace(/&#\d+;/g, "").replace(/\s{2,}/g, " ").trim();
+}
+__name(stripHtml, "stripHtml");
+function parseDate(raw2, fallbackYear) {
+  const cleaned = raw2.replace(/\([^)]*\)/g, "").replace(/\|.*/g, "").replace(/\bat\s+\d+:\d+.*/gi, "").trim();
+  let m = cleaned.match(/([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/);
+  if (m) {
+    const month = MONTH_MAP[m[1].toLowerCase()];
+    if (month) return `${m[3]}-${month}-${m[2].padStart(2, "0")}`;
+  }
+  m = cleaned.match(/(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/);
+  if (m) {
+    const month = MONTH_MAP[m[2].toLowerCase()];
+    if (month) return `${m[3]}-${month}-${m[1].padStart(2, "0")}`;
+  }
+  if (fallbackYear) {
+    m = cleaned.match(/([A-Za-z]+)\s+(\d{1,2})(?!\s*,?\s*\d{4})/);
+    if (m) {
+      const month = MONTH_MAP[m[1].toLowerCase()];
+      if (month) return `${fallbackYear}-${month}-${m[2].padStart(2, "0")}`;
+    }
+  }
+  return null;
+}
+__name(parseDate, "parseDate");
+function pubDateYear(pubDate) {
+  const m = pubDate.match(/\d{4}/);
+  return m ? parseInt(m[0], 10) : (/* @__PURE__ */ new Date()).getFullYear();
+}
+__name(pubDateYear, "pubDateYear");
+function collectDatesFromText(text, fallbackYear) {
+  const pattern = /([A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}\s+[A-Za-z]+\s+\d{4}|[A-Za-z]+\s+\d{1,2}(?!\s*,?\s*\d{4}))/g;
+  const seen = /* @__PURE__ */ new Set();
+  const results = [];
+  let m;
+  while ((m = pattern.exec(text)) !== null) {
+    const d = parseDate(m[1], fallbackYear);
+    if (d && !seen.has(d)) {
+      seen.add(d);
+      results.push(d);
+    }
+  }
+  return results;
+}
+__name(collectDatesFromText, "collectDatesFromText");
+function extractFestivalName(description, title) {
+  const m = description.match(/^The (.+?) \([^)]+\) is accepting/i);
+  if (m) return m[1].trim();
+  return title.replace(/^\d+(?:st|nd|rd|th)\s+/i, "").replace(/\s*[–—-]+\s*Call for Entr(?:y|ies).*/i, "").replace(/\s*[–—-]+\s*Open Call.*/i, "").replace(/\s*[–—-]+\s*Submissions?.*/i, "").replace(/\s*\d{4}$/, "").trim();
+}
+__name(extractFestivalName, "extractFestivalName");
+function extractCountry(description, categories) {
+  const m = description.match(/\(([^)]+)\)\s+is accepting/i);
+  if (m) return m[1].trim();
+  for (const cat of categories) {
+    const key = cat.toLowerCase().replace(/\s+/g, "");
+    if (COUNTRY_TAG_MAP[key]) return COUNTRY_TAG_MAP[key];
+  }
+  return null;
+}
+__name(extractCountry, "extractCountry");
+function extractDeadlines(content, description, fallbackYear) {
+  const text = stripHtml(content);
+  const deadlineIdx = text.search(/deadline[s]?\s*:/i);
+  if (deadlineIdx !== -1) {
+    const section = text.slice(deadlineIdx, deadlineIdx + 600);
+    const dates2 = collectDatesFromText(section, fallbackYear);
+    if (dates2.length === 1) return { early: null, regular: dates2[0] };
+    if (dates2.length >= 2) {
+      dates2.sort();
+      const hasEarlyLabel = /early\s*(?:bird|deadline)/i.test(section);
+      if (hasEarlyLabel) return { early: dates2[0], regular: dates2[dates2.length - 1] };
+      return { early: null, regular: dates2[0] };
+    }
+  }
+  const untilMatches = [...description.matchAll(/until\s+([A-Za-z]+ \d{1,2}(?:,\s*\d{4})?)/gi)];
+  const dates = [];
+  for (const u of untilMatches) {
+    const d = parseDate(u[1], fallbackYear);
+    if (d) dates.push(d);
+  }
+  if (dates.length > 0) {
+    dates.sort();
+    return { early: null, regular: dates[0] };
+  }
+  return { early: null, regular: null };
+}
+__name(extractDeadlines, "extractDeadlines");
+function extractSubmissionUrls(content, articleLink) {
+  const ffMatch = content.match(/href="(https?:\/\/filmfreeway\.com\/[^"]+)"/i);
+  const filmfreeway = ffMatch ? ffMatch[1] : null;
+  const submitParaRe = /<p[^>]*>(?:[^<]|<(?!\/p>))*?to submit(?:[^<]|<(?!\/p>))*?<\/p>/gi;
+  let website = null;
+  let m;
+  while ((m = submitParaRe.exec(content)) !== null) {
+    const hrefMatch = m[0].match(/href="([^"]+)"/);
+    if (hrefMatch) {
+      const url = hrefMatch[1];
+      if (!url.includes("filmfreeway.com") && !url.includes("asianfilmfestivals.com") && url !== articleLink) {
+        website = url;
+        break;
+      }
+    }
+  }
+  return { website, filmfreeway };
+}
+__name(extractSubmissionUrls, "extractSubmissionUrls");
+function extractNotificationDate(content, fallbackYear) {
+  const text = stripHtml(content);
+  const m = text.match(/notification\s+date\s*:\s*([^\n.]+)/i);
+  if (!m) return null;
+  return parseDate(m[1].trim(), fallbackYear);
+}
+__name(extractNotificationDate, "extractNotificationDate");
+function extractFestivalDates(content) {
+  const text = stripHtml(content);
+  const m = text.match(/will take place\s+(?:from\s+)?([A-Za-z][\w\s,–\-]+\d{4})/i);
+  return m ? m[1].replace(/\s+in\s+.*/i, "").trim() : null;
+}
+__name(extractFestivalDates, "extractFestivalDates");
+function inferCategory(categories, content) {
+  const tags = categories.map((c) => c.toLowerCase());
+  const text = stripHtml(content).toLowerCase();
+  if (tags.some((t) => t.includes("doc")) || text.includes("documentary")) return "documentary";
+  if (tags.some((t) => t.includes("short")) || text.includes("short film")) return "short";
+  if (tags.some((t) => t.includes("animat")) || text.includes("animation")) return "animation";
+  if (tags.some((t) => t.includes("experi")) || text.includes("experimental")) return "experimental";
+  return null;
+}
+__name(inferCategory, "inferCategory");
+function parseRss(xml) {
+  const items = [];
+  const itemRe = /<item>([\s\S]*?)<\/item>/g;
+  let m;
+  while ((m = itemRe.exec(xml)) !== null) {
+    const block = m[1];
+    items.push({
+      guid: stripCdata(extractTag(block, "guid") ?? extractTag(block, "link") ?? ""),
+      title: stripCdata(extractTag(block, "title") ?? ""),
+      link: extractTag(block, "link") ?? "",
+      pubDate: extractTag(block, "pubDate") ?? "",
+      description: stripCdata(extractTag(block, "description") ?? ""),
+      content: stripCdata(extractTag(block, "content:encoded") ?? extractTag(block, "description") ?? ""),
+      categories: extractAllTags(block, "category").map(stripCdata)
+    });
+  }
+  return items;
+}
+__name(parseRss, "parseRss");
+async function fetchRssFeed(url) {
+  const response = await fetch(url, {
+    headers: { "User-Agent": "IFT-Bot/1.0 (Indie Filmmaking Tracker)" },
+    redirect: "follow"
+  });
+  if (!response.ok) throw new Error(`RSS fetch failed: ${response.status} ${url}`);
+  return parseRss(await response.text());
+}
+__name(fetchRssFeed, "fetchRssFeed");
+function parseFestivalItem(item) {
+  const isCallForEntry = item.categories.some((c) => /call.?for.?entr/i.test(c)) || /call for entr/i.test(item.title);
+  if (!isCallForEntry) return null;
+  const year = pubDateYear(item.pubDate);
+  const name = extractFestivalName(item.description, item.title);
+  if (!name) return null;
+  const { early, regular } = extractDeadlines(item.content, item.description, year);
+  const { website, filmfreeway } = extractSubmissionUrls(item.content, item.link);
+  return {
+    name,
+    country: extractCountry(item.description, item.categories),
+    website: website ?? item.link,
+    filmfreeway_url: filmfreeway,
+    category: inferCategory(item.categories, item.content),
+    early_deadline: early,
+    regular_deadline: regular,
+    notification_date: extractNotificationDate(item.content, year),
+    festival_dates: extractFestivalDates(item.content),
+    description: item.description,
+    source: "rss"
+  };
+}
+__name(parseFestivalItem, "parseFestivalItem");
+async function saveFestivals(db, festivals) {
+  let saved = 0;
+  let skipped = 0;
+  const errors = [];
+  for (const f of festivals) {
+    try {
+      const existing = await db.prepare(
+        `SELECT id FROM festivals
+           WHERE name = ?
+             AND (regular_deadline = ? OR (regular_deadline IS NULL AND ? IS NULL))`
+      ).bind(f.name, f.regular_deadline, f.regular_deadline).first();
+      if (existing) {
+        skipped++;
+        continue;
+      }
+      await db.prepare(
+        `INSERT INTO festivals
+             (name, country, website, filmfreeway_url, category,
+              early_deadline, regular_deadline, notification_date,
+              festival_dates, description, source)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        f.name,
+        f.country,
+        f.website,
+        f.filmfreeway_url,
+        f.category,
+        f.early_deadline,
+        f.regular_deadline,
+        f.notification_date,
+        f.festival_dates,
+        f.description,
+        f.source
+      ).run();
+      saved++;
+    } catch (err) {
+      errors.push(`${f.name}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return { saved, skipped, errors };
+}
+__name(saveFestivals, "saveFestivals");
+async function scrapeAsianFilmFestivals(db) {
+  const items = await fetchRssFeed(ASIAN_FILM_FESTIVALS_FEED);
+  console.log(`[Scraper] Fetched ${items.length} RSS items from asianfilmfestivals.com`);
+  const festivals = [];
+  for (const item of items) {
+    const parsed = parseFestivalItem(item);
+    if (parsed) festivals.push(parsed);
+  }
+  console.log(`[Scraper] Parsed ${festivals.length} call-for-entry items`);
+  for (const item of items) {
+    try {
+      await db.prepare(
+        `INSERT OR IGNORE INTO rss_cache
+             (feed_url, item_guid, title, link, pub_date, content, processed)
+           VALUES (?, ?, ?, ?, ?, ?, 1)`
+      ).bind(
+        ASIAN_FILM_FESTIVALS_FEED,
+        item.guid,
+        item.title,
+        item.link,
+        item.pubDate,
+        item.description
+      ).run();
+    } catch {
+    }
+  }
+  const result = await saveFestivals(db, festivals);
+  console.log(
+    `[Scraper] Done \u2014 saved: ${result.saved}, skipped: ${result.skipped}` + (result.errors.length ? `, errors: ${result.errors.join("; ")}` : "")
+  );
+  return result;
+}
+__name(scrapeAsianFilmFestivals, "scrapeAsianFilmFestivals");
 
 // src/workers/cron.ts
-var RSS_FEEDS = ["https://asianfilmfestivals.com/feed"];
 async function handleCron(env) {
   console.log("[IFT Cron] Starting daily run:", (/* @__PURE__ */ new Date()).toISOString());
   await Promise.allSettled([
-    processRssFeeds(env),
+    runScraper(env),
     checkMonitorCommands(env),
     sendDailyDigest(env)
   ]);
   console.log("[IFT Cron] Done.");
 }
 __name(handleCron, "handleCron");
-async function processRssFeeds(env) {
-  for (const feedUrl of RSS_FEEDS) {
-    try {
-      const items = await fetchRssFeed(feedUrl);
-      console.log(`[RSS] ${feedUrl}: ${items.length} items`);
-      for (const item of items) {
-        await env.DB.prepare(
-          `INSERT OR IGNORE INTO rss_cache (feed_url, item_guid, title, link, pub_date, content)
-           VALUES (?, ?, ?, ?, ?, ?)`
-        ).bind(feedUrl, item.guid, item.title, item.link, item.pubDate, item.content).run();
-      }
-    } catch (err) {
-      console.error(`[RSS] Failed ${feedUrl}:`, err);
+async function runScraper(env) {
+  try {
+    const result = await scrapeAsianFilmFestivals(env.DB);
+    console.log(`[Cron] Scraper \u2014 saved: ${result.saved}, skipped: ${result.skipped}`);
+    if (result.errors.length) {
+      console.error("[Cron] Scraper errors:", result.errors);
     }
+  } catch (err) {
+    console.error("[Cron] Scraper failed:", err);
   }
 }
-__name(processRssFeeds, "processRssFeeds");
+__name(runScraper, "runScraper");
 async function checkMonitorCommands(env) {
   const commands = await env.DB.prepare(
     `SELECT mc.*,

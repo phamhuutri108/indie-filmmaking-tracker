@@ -1,7 +1,7 @@
 // IFT Cron Job — Daily at 08:00 UTC
 // Runs via Cloudflare Cron Trigger
 
-import { fetchRssFeed } from './scraper';
+import { scrapeAsianFilmFestivals } from './scraper';
 
 export interface Env {
   DB: D1Database;
@@ -10,13 +10,11 @@ export interface Env {
   APP_URL: string;
 }
 
-const RSS_FEEDS = ['https://asianfilmfestivals.com/feed'];
-
 export async function handleCron(env: Env): Promise<void> {
   console.log('[IFT Cron] Starting daily run:', new Date().toISOString());
 
   await Promise.allSettled([
-    processRssFeeds(env),
+    runScraper(env),
     checkMonitorCommands(env),
     sendDailyDigest(env),
   ]);
@@ -24,23 +22,15 @@ export async function handleCron(env: Env): Promise<void> {
   console.log('[IFT Cron] Done.');
 }
 
-async function processRssFeeds(env: Env): Promise<void> {
-  for (const feedUrl of RSS_FEEDS) {
-    try {
-      const items = await fetchRssFeed(feedUrl);
-      console.log(`[RSS] ${feedUrl}: ${items.length} items`);
-
-      for (const item of items) {
-        await env.DB.prepare(
-          `INSERT OR IGNORE INTO rss_cache (feed_url, item_guid, title, link, pub_date, content)
-           VALUES (?, ?, ?, ?, ?, ?)`
-        )
-          .bind(feedUrl, item.guid, item.title, item.link, item.pubDate, item.content)
-          .run();
-      }
-    } catch (err) {
-      console.error(`[RSS] Failed ${feedUrl}:`, err);
+async function runScraper(env: Env): Promise<void> {
+  try {
+    const result = await scrapeAsianFilmFestivals(env.DB);
+    console.log(`[Cron] Scraper — saved: ${result.saved}, skipped: ${result.skipped}`);
+    if (result.errors.length) {
+      console.error('[Cron] Scraper errors:', result.errors);
     }
+  } catch (err) {
+    console.error('[Cron] Scraper failed:', err);
   }
 }
 

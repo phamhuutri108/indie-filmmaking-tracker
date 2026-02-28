@@ -6,7 +6,7 @@
 -- ============================================================
 CREATE TABLE IF NOT EXISTS festivals (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
   name_vi TEXT,
   country TEXT,
   city TEXT,
@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS festivals (
   source TEXT, -- filmfreeway, rss, manual
   last_checked DATETIME DEFAULT CURRENT_TIMESTAMP,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(name, regular_deadline)
 );
 
 -- ============================================================
