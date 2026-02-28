@@ -37,7 +37,9 @@ export function decodeJWT(token: string): { sub: number; role: string; email: st
     const parts = token.split('.');
     if (parts.length !== 3) return null;
     const padded = parts[1].replace(/-/g, '+').replace(/_/g, '/') + '==='.slice(0, (4 - parts[1].length % 4) % 4);
-    return JSON.parse(atob(padded));
+    // Use TextDecoder to correctly handle UTF-8 multibyte characters (e.g. Vietnamese)
+    const bytes = Uint8Array.from(atob(padded), c => c.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
   } catch {
     return null;
   }

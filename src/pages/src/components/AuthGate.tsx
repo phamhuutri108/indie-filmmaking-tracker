@@ -38,6 +38,8 @@ export function AuthGate({ onAuth }: { onAuth: (role: Role, token?: string) => v
   const [mode, setMode] = useState<'choose' | 'owner_password' | 'pending'>(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('auth_status') === 'pending') return 'pending';
+    // Secret owner login URL: /owner
+    if (window.location.pathname === '/owner') return 'owner_password';
     return 'choose';
   });
   const [pw, setPw] = useState('');
@@ -56,6 +58,7 @@ export function AuthGate({ onAuth }: { onAuth: (role: Role, token?: string) => v
       });
       if (res.ok) {
         const { token } = await res.json() as { token: string };
+        window.history.replaceState({}, '', '/');
         onAuth('owner', token);
       } else {
         setError('Incorrect password. / Mật khẩu không đúng.');
@@ -91,7 +94,7 @@ export function AuthGate({ onAuth }: { onAuth: (role: Role, token?: string) => v
         {mode === 'choose' && (
           <>
             <h2 style={{ margin: '0 0 6px', fontSize: 20, color: '#1a202c', textAlign: 'center' }}>
-              Welcome to IFT
+              Welcome to Indie Filmmaking Tracker
             </h2>
             <p style={{ margin: '0 0 28px', fontSize: 13, color: '#718096', textAlign: 'center' }}>
               How would you like to continue?
@@ -100,12 +103,6 @@ export function AuthGate({ onAuth }: { onAuth: (role: Role, token?: string) => v
               <button onClick={loginWithGoogle} style={btnGoogle}>
                 <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" style={{ width: 18, height: 18 }} />
                 Continue with Google
-              </button>
-              <div style={{ textAlign: 'center', color: '#a0aec0', fontSize: 12, margin: '4px 0' }}>
-                — or —
-              </div>
-              <button onClick={() => setMode('owner_password')} style={btnOwner}>
-                🔑 Owner — Full Access
               </button>
               <button onClick={() => onAuth('guest')} style={btnGuest}>
                 👁 Guest — View Only
@@ -141,7 +138,7 @@ export function AuthGate({ onAuth }: { onAuth: (role: Role, token?: string) => v
               <p style={{ margin: '0 0 12px', fontSize: 12, color: '#e53e3e' }}>{error}</p>
             )}
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => { setMode('choose'); setError(''); setPw(''); }} style={btnBack}>
+              <button onClick={() => { setMode('choose'); setError(''); setPw(''); window.history.replaceState({}, '', '/'); }} style={btnBack}>
                 ← Back
               </button>
               <button onClick={tryOwnerLogin} disabled={loading} style={{ ...btnOwner, flex: 1, opacity: loading ? 0.7 : 1 }}>

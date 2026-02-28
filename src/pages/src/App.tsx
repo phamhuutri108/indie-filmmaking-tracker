@@ -9,6 +9,7 @@ import { MyFilms } from './components/MyFilms';
 import { Submissions } from './components/Submissions';
 import { Watchlist } from './components/Watchlist';
 import { AuthGate, useAuth, getAuthUserName } from './components/AuthGate';
+import { UserManager } from './components/UserManager';
 import { decodeJWT } from './apiFetch';
 
 type Tab = 'dashboard' | 'festivals' | 'funds' | 'education' | 'monitors' | 'films' | 'submissions' | 'watchlist';
@@ -16,6 +17,7 @@ type Tab = 'dashboard' | 'festivals' | 'funds' | 'education' | 'monitors' | 'fil
 export default function App() {
   const [lang, setLang] = useState<Lang>('en');
   const [tab, setTab] = useState<Tab>('dashboard');
+  const [showUsers, setShowUsers] = useState(false);
   const t = useI18n(lang);
   const { role, login, logout } = useAuth();
   const isOwner = role === 'owner';
@@ -87,6 +89,19 @@ export default function App() {
           }}>
             {roleBadge}
           </span>
+          {isOwner && (
+            <button
+              onClick={() => setShowUsers(true)}
+              title="Quản lý user"
+              style={{
+                background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)',
+                border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6,
+                padding: '4px 10px', cursor: 'pointer', fontSize: 14,
+              }}
+            >
+              👥
+            </button>
+          )}
           <button
             onClick={() => setLang(lang === 'en' ? 'vi' : 'en')}
             style={{
@@ -147,6 +162,8 @@ export default function App() {
           </button>
         ))}
       </nav>
+
+      {showUsers && <UserManager onClose={() => setShowUsers(false)} />}
 
       {/* Content */}
       <main style={{ maxWidth: 960, margin: '0 auto', padding: '28px 16px' }}>

@@ -221,6 +221,38 @@ app.get('/api/auth/pending', async (c) => {
   return c.json({ data: result.results });
 });
 
+// List all users (owner only)
+app.get('/api/auth/users', async (c) => {
+  const payload = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!payload || payload.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
+  const result = await c.env.DB.prepare(
+    `SELECT id, email, name, role, status, avatar, created_at FROM users ORDER BY created_at ASC`
+  ).all();
+  return c.json({ data: result.results });
+});
+
+// Update user status (approve/block) — owner only
+app.patch('/api/auth/users/:id', async (c) => {
+  const payload = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!payload || payload.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
+  const userId = Number(c.req.param('id'));
+  const body = await c.req.json<{ status?: string }>();
+  if (body.status) {
+    await c.env.DB.prepare(`UPDATE users SET status = ? WHERE id = ?`).bind(body.status, userId).run();
+  }
+  return c.json({ ok: true });
+});
+
+// Delete user — owner only, cannot delete self (id=1)
+app.delete('/api/auth/users/:id', async (c) => {
+  const payload = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!payload || payload.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
+  const userId = Number(c.req.param('id'));
+  if (userId === 1) return c.json({ error: 'Cannot delete owner account' }, 400);
+  await c.env.DB.prepare(`DELETE FROM users WHERE id = ?`).bind(userId).run();
+  return c.json({ ok: true });
+});
+
 // ============================================================
 // Manual triggers
 // ============================================================
