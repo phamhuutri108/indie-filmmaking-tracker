@@ -83,7 +83,7 @@ export function AuthGate({ onAuth }: { onAuth: (role: Role, token?: string) => v
       fontFamily: "'Montserrat', system-ui, sans-serif",
       padding: 24,
     }}>
-      <img src="/ift-logo.png" alt="IFT" style={{ height: 80, marginBottom: 28 }} />
+      <img src="/ift-logo.png" alt="IFT" style={{ height: 240, marginBottom: 28 }} />
 
       <div style={{
         background: '#fff', borderRadius: 12,
