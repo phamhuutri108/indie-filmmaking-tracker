@@ -130,6 +130,7 @@ export default function App() {
               href="https://www.phamhuutri.com"
               target="_blank"
               rel="noreferrer"
+              className="header-my-website"
               style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', textDecoration: 'none', whiteSpace: 'nowrap' }}
             >
               MY WEBSITE
