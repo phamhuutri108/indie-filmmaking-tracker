@@ -3,7 +3,7 @@ export const en = {
     dashboard: 'Dashboard',
     festivals: 'Festivals',
     funds: 'Funds & Grants',
-    education: 'Education',
+    education: 'Education & Residency',
     monitors: 'Monitors',
     films: 'My Films',
     submissions: 'Submissions',
@@ -96,7 +96,7 @@ export const en = {
     },
   },
   education: {
-    title: 'Education & Residency Hub',
+    title: 'Education & Residency',
     subtitle: 'Labs, residencies, workshops & scholarships',
     deadline: 'Deadline',
     duration: 'Duration',

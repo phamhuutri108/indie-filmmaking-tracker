@@ -3,7 +3,7 @@ export const vi = {
     dashboard: 'Tổng quan',
     festivals: 'Liên hoan phim',
     funds: 'Quỹ & Tài trợ',
-    education: 'Học thuật',
+    education: 'Học thuật & Khu lưu trú',
     monitors: 'Theo dõi',
     films: 'Phim của tôi',
     submissions: 'Nộp phim',

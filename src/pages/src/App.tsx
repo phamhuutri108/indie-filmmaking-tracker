@@ -120,12 +120,20 @@ export default function App() {
           justifyContent: 'space-between', alignItems: 'center',
           height: 64, boxShadow: '0 2px 8px rgba(0,74,173,0.3)',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <img
               src="/ift-logo_landscape.png"
               alt="Indie Filmmaking Tracker"
               style={{ height: 48, width: 'auto', objectFit: 'contain', display: 'block' }}
             />
+            <a
+              href="https://www.phamhuutri.com"
+              target="_blank"
+              rel="noreferrer"
+              style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', textDecoration: 'none', whiteSpace: 'nowrap' }}
+            >
+              My website
+            </a>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
