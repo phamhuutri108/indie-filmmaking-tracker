@@ -1,0 +1,18 @@
+name = "ift-api"
+main = "src/workers/index.ts"
+compatibility_date = "2024-01-01"
+
+[site]
+bucket = "./src/pages/dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ift-db"
+database_id = "f2c944ae-d37a-43a5-b27c-897dc4d6cb3c"
+
+[triggers]
+crons = ["0 8 * * *"]
+
+[vars]
+ENVIRONMENT = "production"
+APP_URL = "https://ift.phamhuutri.com"
