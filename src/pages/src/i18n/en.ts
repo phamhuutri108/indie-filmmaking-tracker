@@ -1,0 +1,71 @@
+export const en = {
+  nav: {
+    dashboard: 'Dashboard',
+    festivals: 'Festivals',
+    funds: 'Funds & Grants',
+    education: 'Education',
+    monitors: 'Monitors',
+  },
+  dashboard: {
+    title: 'Film Intelligence Dashboard',
+    subtitle: 'Upcoming deadlines in the next 30 days',
+    noItems: 'No upcoming deadlines.',
+    type: {
+      festival: 'Festival',
+      fund: 'Fund',
+      education: 'Education',
+    },
+  },
+  festivals: {
+    title: 'Festival Tracker',
+    subtitle: 'International film festivals & deadlines',
+    earlyDeadline: 'Early Deadline',
+    regularDeadline: 'Deadline',
+    category: 'Category',
+    tier: 'Tier',
+  },
+  funds: {
+    title: 'Fund & Grant Radar',
+    subtitle: 'International film funds, grants & financing',
+    maxAmount: 'Max Amount',
+    deadline: 'Deadline',
+    type: 'Type',
+    focus: 'Focus',
+  },
+  education: {
+    title: 'Education & Residency Hub',
+    subtitle: 'Labs, residencies, workshops & scholarships',
+    deadline: 'Deadline',
+    duration: 'Duration',
+    type: 'Type',
+  },
+  monitors: {
+    title: 'Monitor Commands',
+    subtitle: 'Set alerts for deadlines you want to track',
+    addMonitor: 'Add Monitor',
+    alertDays: 'Alert days before',
+    active: 'Active',
+    deactivate: 'Deactivate',
+    url: 'URL to monitor',
+    name: 'Name',
+    watchFor: 'Watch for',
+  },
+  common: {
+    viewDetails: 'View Details',
+    website: 'Website',
+    deadline: 'Deadline',
+    daysLeft: 'days left',
+    tomorrow: 'TOMORROW',
+    today: 'TODAY',
+    loading: 'Loading...',
+    error: 'Error loading data',
+    noData: 'No data available',
+    status: {
+      active: 'Active',
+      closed: 'Closed',
+      cancelled: 'Cancelled',
+    },
+  },
+} as const;
+
+export type I18nEn = typeof en;

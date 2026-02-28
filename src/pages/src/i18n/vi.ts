@@ -1,0 +1,71 @@
+export const vi = {
+  nav: {
+    dashboard: 'Tổng quan',
+    festivals: 'Liên hoan phim',
+    funds: 'Quỹ & Tài trợ',
+    education: 'Học thuật',
+    monitors: 'Theo dõi',
+  },
+  dashboard: {
+    title: 'Bảng điều khiển Film Intelligence',
+    subtitle: 'Hạn chót sắp tới trong 30 ngày',
+    noItems: 'Không có hạn chót sắp tới.',
+    type: {
+      festival: 'Liên hoan phim',
+      fund: 'Quỹ',
+      education: 'Học thuật',
+    },
+  },
+  festivals: {
+    title: 'Theo dõi liên hoan phim',
+    subtitle: 'Liên hoan phim quốc tế & hạn chót',
+    earlyDeadline: 'Hạn sớm',
+    regularDeadline: 'Hạn chót',
+    category: 'Thể loại',
+    tier: 'Hạng mục',
+  },
+  funds: {
+    title: 'Radar Quỹ & Tài trợ',
+    subtitle: 'Quỹ phim quốc tế, tài trợ & tài chính',
+    maxAmount: 'Số tiền tối đa',
+    deadline: 'Hạn chót',
+    type: 'Loại',
+    focus: 'Trọng tâm',
+  },
+  education: {
+    title: 'Học thuật & Khu lưu trú',
+    subtitle: 'Labs, khu lưu trú, workshop & học bổng',
+    deadline: 'Hạn chót',
+    duration: 'Thời gian',
+    type: 'Loại',
+  },
+  monitors: {
+    title: 'Lệnh theo dõi',
+    subtitle: 'Đặt cảnh báo cho hạn chót bạn muốn theo dõi',
+    addMonitor: 'Thêm theo dõi',
+    alertDays: 'Cảnh báo trước (ngày)',
+    active: 'Đang hoạt động',
+    deactivate: 'Vô hiệu hóa',
+    url: 'URL cần theo dõi',
+    name: 'Tên',
+    watchFor: 'Theo dõi điều gì',
+  },
+  common: {
+    viewDetails: 'Xem chi tiết',
+    website: 'Website',
+    deadline: 'Hạn chót',
+    daysLeft: 'ngày còn lại',
+    tomorrow: 'NGÀY MAI',
+    today: 'HÔM NAY',
+    loading: 'Đang tải...',
+    error: 'Lỗi tải dữ liệu',
+    noData: 'Không có dữ liệu',
+    status: {
+      active: 'Đang hoạt động',
+      closed: 'Đã đóng',
+      cancelled: 'Đã hủy',
+    },
+  },
+} as const;
+
+export type I18nVi = typeof vi;
