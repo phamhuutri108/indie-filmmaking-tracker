@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useI18n } from '../i18n';
+import { apiFetch } from '../apiFetch';
 import { inputStyle, labelStyle, formRowStyle } from './Modal';
 import { DeadlineBadge } from './DeadlineBadge';
 import type { Monitor } from '../types';
@@ -41,7 +42,7 @@ export function MonitorList({ t, isOwner }: { t: ReturnType<typeof useI18n>; isO
   const [loadingRecords, setLoadingRecords] = useState(false);
 
   const load = () => {
-    fetch(`${API_BASE}/monitors`)
+    apiFetch(`${API_BASE}/monitors`)
       .then((r) => r.json() as Promise<{ data: Monitor[] }>)
       .then((d) => setItems(d.data ?? []))
       .catch(() => setItems([]))
@@ -59,7 +60,7 @@ export function MonitorList({ t, isOwner }: { t: ReturnType<typeof useI18n>; isO
       form.ref_table === 'funds_grants' ? `${API_BASE}/funds` :
       `${API_BASE}/education`;
 
-    fetch(endpoint)
+    apiFetch(endpoint)
       .then((r) => r.json() as Promise<{ data: any[] }>)
       .then((d) => {
         setRecordOptions(
@@ -98,7 +99,7 @@ export function MonitorList({ t, isOwner }: { t: ReturnType<typeof useI18n>; isO
     if (form.ref_table) body.ref_table = form.ref_table;
     if (form.ref_id) body.ref_id = form.ref_id;
 
-    await fetch(`${API_BASE}/monitors`, {
+    await apiFetch(`${API_BASE}/monitors`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -109,7 +110,7 @@ export function MonitorList({ t, isOwner }: { t: ReturnType<typeof useI18n>; isO
   };
 
   const deactivate = async (id: number) => {
-    await fetch(`${API_BASE}/monitors/${id}`, { method: 'DELETE' });
+    await apiFetch(`${API_BASE}/monitors/${id}`, { method: 'DELETE' });
     load();
   };
 

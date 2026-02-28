@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useI18n } from '../i18n';
+import { apiFetch } from '../apiFetch';
 import { DeadlineBadge } from './DeadlineBadge';
 import { Modal, inputStyle, labelStyle, formRowStyle, formGridStyle } from './Modal';
 import type { Festival } from '../types';
@@ -287,7 +288,7 @@ function AddFestivalModal({
 }
 
 // ─── Main FestivalList ────────────────────────────────────────────────────────
-export function FestivalList({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwner: boolean }) {
+export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI18n>; isOwner: boolean; isLoggedIn: boolean }) {
   const [items, setItems] = useState<Festival[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -307,7 +308,7 @@ export function FestivalList({ t, isOwner }: { t: ReturnType<typeof useI18n>; is
   };
 
   const loadWatchlist = () => {
-    fetch(`${API_BASE}/watchlist`)
+    apiFetch(`${API_BASE}/watchlist`)
       .then((r) => r.json() as Promise<{ data: Array<{ ref_table: string; ref_id: number }> }>)
       .then((d) => {
         const ids = new Set(
@@ -321,12 +322,11 @@ export function FestivalList({ t, isOwner }: { t: ReturnType<typeof useI18n>; is
   const toggleStar = async (e: React.MouseEvent, festivalId: number) => {
     e.stopPropagation();
     if (watchlistIds.has(festivalId)) {
-      await fetch(`${API_BASE}/watchlist/ref/festivals/${festivalId}`, { method: 'DELETE' });
+      await apiFetch(`${API_BASE}/watchlist/ref/festivals/${festivalId}`, { method: 'DELETE' });
       setWatchlistIds((prev) => { const s = new Set(prev); s.delete(festivalId); return s; });
     } else {
-      await fetch(`${API_BASE}/watchlist`, {
+      await apiFetch(`${API_BASE}/watchlist`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ref_table: 'festivals', ref_id: festivalId }),
       });
       setWatchlistIds((prev) => new Set([...prev, festivalId]));
@@ -426,7 +426,7 @@ export function FestivalList({ t, isOwner }: { t: ReturnType<typeof useI18n>; is
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-                  {isOwner && (
+                  {isLoggedIn && (
                     <button
                       onClick={(e) => toggleStar(e, f.id)}
                       title={watchlistIds.has(f.id) ? 'Remove from watchlist' : 'Add to watchlist'}

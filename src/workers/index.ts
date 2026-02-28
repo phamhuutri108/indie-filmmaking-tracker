@@ -8,6 +8,7 @@ import { handleCron } from './cron';
 import { scrapeAsianFilmFestivals } from './scraper';
 import { scrapeFunds } from './fund-scraper';
 import { generateICS, dbRowsToEvents } from './calendar';
+import { signJWT, verifyJWT, getUserFromRequest } from './auth';
 
 // Injected by wrangler at build time when [site] is configured
 // @ts-ignore
@@ -20,11 +21,14 @@ export interface Env {
   ALERT_EMAIL: string;
   APP_URL: string;
   ENVIRONMENT: string;
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
+  JWT_SECRET: string;
+  OWNER_PASSWORD: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();
 
-// CORS only for API routes
 app.use('/api/*', cors({ origin: '*' }));
 
 // ============================================================
@@ -35,20 +39,208 @@ app.get('/api/health', (c) =>
 );
 
 // ============================================================
-// Manual scrape trigger
+// AUTH
 // ============================================================
-app.get('/api/scrape', async (c) => {
-  const result = await scrapeAsianFilmFestivals(c.env.DB);
-  return c.json({
-    saved: result.saved,
-    skipped: result.skipped,
-    errors: result.errors,
-    ts: new Date().toISOString(),
+
+// Step 1: redirect to Google
+app.get('/api/auth/google', (c) => {
+  const params = new URLSearchParams({
+    client_id: c.env.GOOGLE_CLIENT_ID,
+    redirect_uri: `${c.env.APP_URL}/api/auth/callback`,
+    response_type: 'code',
+    scope: 'openid email profile',
+    access_type: 'online',
+    prompt: 'select_account',
   });
+  return c.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+});
+
+// Step 2: Google callback
+app.get('/api/auth/callback', async (c) => {
+  const { code, error } = c.req.query();
+  if (error || !code) {
+    return c.redirect(`${c.env.APP_URL}/?auth_error=${error ?? 'cancelled'}`);
+  }
+
+  // Exchange code for access token
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id: c.env.GOOGLE_CLIENT_ID,
+      client_secret: c.env.GOOGLE_CLIENT_SECRET,
+      redirect_uri: `${c.env.APP_URL}/api/auth/callback`,
+      grant_type: 'authorization_code',
+    }),
+  });
+  if (!tokenRes.ok) return c.redirect(`${c.env.APP_URL}/?auth_error=token_failed`);
+
+  const tokens: any = await tokenRes.json();
+
+  // Get Google profile
+  const profileRes = await fetch('https://www.googleapis.com/userinfo/v2/me', {
+    headers: { Authorization: `Bearer ${tokens.access_token}` },
+  });
+  if (!profileRes.ok) return c.redirect(`${c.env.APP_URL}/?auth_error=profile_failed`);
+
+  const profile: any = await profileRes.json();
+  const { id: googleId, email, name, picture: avatar } = profile;
+
+  // Upsert user
+  let user = await c.env.DB.prepare(
+    `SELECT id, status, role FROM users WHERE google_id = ?`
+  ).bind(googleId).first<{ id: number; status: string; role: string }>();
+
+  if (!user) {
+    // Check by email (e.g. owner linking Google account)
+    const byEmail = await c.env.DB.prepare(
+      `SELECT id, status, role FROM users WHERE email = ?`
+    ).bind(email).first<{ id: number; status: string; role: string }>();
+
+    if (byEmail) {
+      await c.env.DB.prepare(
+        `UPDATE users SET google_id = ?, name = ?, avatar = ? WHERE id = ?`
+      ).bind(googleId, name, avatar, byEmail.id).run();
+      user = byEmail;
+    } else {
+      // New user — pending
+      const ins = await c.env.DB.prepare(
+        `INSERT INTO users (google_id, email, name, avatar, role, status) VALUES (?, ?, ?, ?, 'member', 'pending')`
+      ).bind(googleId, email, name, avatar).run();
+      user = { id: ins.meta.last_row_id as number, status: 'pending', role: 'member' };
+
+      // Notify owner
+      if (c.env.RESEND_API_KEY && c.env.ALERT_EMAIL) {
+        // approval token is valid for 30 days (same as JWT)
+        const approveToken = await signJWT(
+          { sub: user.id, role: 'system', email, name },
+          c.env.JWT_SECRET,
+        );
+        const approveUrl = `${c.env.APP_URL}/api/auth/approve/${user.id}?token=${approveToken}`;
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${c.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'IFT <noreply@ift.phamhuutri.com>',
+            to: [c.env.ALERT_EMAIL],
+            subject: `[IFT] New member request: ${name} (${email})`,
+            html: `
+              <p><strong>${name}</strong> (${email}) đã đăng ký tài khoản IFT.</p>
+              <p><a href="${approveUrl}" style="background:#004aad;color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px">✅ Approve</a></p>
+              <p style="color:#999;font-size:12px">Link này có hiệu lực 30 ngày.</p>
+            `,
+          }),
+        });
+      }
+    }
+  } else {
+    await c.env.DB.prepare(
+      `UPDATE users SET name = ?, avatar = ? WHERE id = ?`
+    ).bind(name, avatar, user.id).run();
+  }
+
+  if (user.status !== 'approved') {
+    return c.redirect(`${c.env.APP_URL}/?auth_status=pending`);
+  }
+
+  const freshUser = await c.env.DB.prepare(
+    `SELECT id, email, name, role FROM users WHERE id = ?`
+  ).bind(user.id).first<{ id: number; email: string; name: string; role: string }>();
+
+  if (!freshUser) return c.redirect(`${c.env.APP_URL}/?auth_error=db_error`);
+
+  const jwt = await signJWT(
+    { sub: freshUser.id, role: freshUser.role, email: freshUser.email, name: freshUser.name ?? '' },
+    c.env.JWT_SECRET,
+  );
+  return c.redirect(`${c.env.APP_URL}/?token=${jwt}`);
+});
+
+// Owner password login
+app.post('/api/auth/owner', async (c) => {
+  const { password } = await c.req.json<{ password: string }>();
+  if (password !== c.env.OWNER_PASSWORD) {
+    return c.json({ error: 'Invalid password' }, 401);
+  }
+  await c.env.DB.prepare(
+    `INSERT OR IGNORE INTO users (id, email, name, role, status) VALUES (1, 'owner@ift.internal', 'Tri Pham', 'owner', 'approved')`
+  ).run();
+  const jwt = await signJWT(
+    { sub: 1, role: 'owner', email: 'owner@ift.internal', name: 'Tri Pham' },
+    c.env.JWT_SECRET,
+  );
+  return c.json({ token: jwt });
+});
+
+// Current user
+app.get('/api/auth/me', async (c) => {
+  const payload = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!payload) return c.json({ error: 'Unauthorized' }, 401);
+  const user = await c.env.DB.prepare(
+    `SELECT id, email, name, role, status, avatar FROM users WHERE id = ?`
+  ).bind(payload.sub).first();
+  return user ? c.json(user) : c.json({ error: 'Not found' }, 404);
+});
+
+// Approve pending user (owner clicks email link)
+app.get('/api/auth/approve/:id', async (c) => {
+  const { token } = c.req.query();
+  if (!token) return c.text('Missing token', 400);
+  const payload = await verifyJWT(token, c.env.JWT_SECRET);
+  if (!payload || payload.role !== 'system') return c.text('Invalid or expired link', 400);
+
+  const userId = Number(c.req.param('id'));
+  if (payload.sub !== userId) return c.text('Token mismatch', 400);
+
+  const user = await c.env.DB.prepare(`SELECT name, email FROM users WHERE id = ?`).bind(userId).first<{ name: string; email: string }>();
+  await c.env.DB.prepare(`UPDATE users SET status = 'approved' WHERE id = ?`).bind(userId).run();
+
+  return c.html(`
+    <html><head><meta charset="utf-8"></head>
+    <body style="font-family:'Segoe UI',sans-serif;text-align:center;padding:60px;background:#f7fafc">
+      <div style="max-width:400px;margin:0 auto;background:#fff;border-radius:12px;padding:40px;box-shadow:0 2px 8px rgba(0,0,0,.08)">
+        <div style="font-size:48px;margin-bottom:16px">✅</div>
+        <h2 style="color:#1a202c;margin:0 0 8px">${user?.name ?? 'User'} approved!</h2>
+        <p style="color:#718096;margin:0">${user?.email} can now log in to IFT.</p>
+      </div>
+    </body></html>
+  `);
+});
+
+// List pending users (owner only)
+app.get('/api/auth/pending', async (c) => {
+  const payload = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!payload || payload.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
+  const result = await c.env.DB.prepare(
+    `SELECT id, email, name, created_at FROM users WHERE status = 'pending' ORDER BY created_at DESC`
+  ).all();
+  return c.json({ data: result.results });
 });
 
 // ============================================================
-// MODULE 1: Festivals
+// Manual triggers
+// ============================================================
+app.get('/api/scrape', async (c) => {
+  const result = await scrapeAsianFilmFestivals(c.env.DB);
+  return c.json({ saved: result.saved, skipped: result.skipped, errors: result.errors, ts: new Date().toISOString() });
+});
+
+app.get('/api/funds/scrape', async (c) => {
+  const result = await scrapeFunds(c.env.DB);
+  return c.json({ saved: result.saved, skipped: result.skipped, errors: result.errors, ts: new Date().toISOString() });
+});
+
+app.get('/api/cron/run', async (c) => {
+  await handleCron(c.env);
+  return c.json({ ok: true, ts: new Date().toISOString() });
+});
+
+// ============================================================
+// MODULE 1: Festivals (global — no user scoping)
 // ============================================================
 app.get('/api/festivals', async (c) => {
   const { category, tier, status = 'active', limit = '20', offset = '0' } = c.req.query();
@@ -68,12 +260,14 @@ app.get('/api/festivals', async (c) => {
 
 app.get('/api/festivals/:id', async (c) => {
   const row = await c.env.DB.prepare(`SELECT * FROM festivals WHERE id = ?`)
-    .bind(c.req.param('id'))
-    .first();
+    .bind(c.req.param('id')).first();
   return row ? c.json(row) : c.json({ error: 'Not found' }, 404);
 });
 
 app.post('/api/festivals', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user || user.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
+
   const body = await c.req.json<Record<string, unknown>>();
   const {
     name, name_vi, country, city, website, filmfreeway_url,
@@ -87,37 +281,15 @@ app.post('/api/festivals', async (c) => {
       early_deadline, regular_deadline, late_deadline, notification_date, festival_dates,
       entry_fee_early, entry_fee_regular, description, description_vi, source)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  )
-    .bind(name, name_vi, country, city, website, filmfreeway_url, category, tier,
-      early_deadline, regular_deadline, late_deadline, notification_date, festival_dates,
-      entry_fee_early, entry_fee_regular, description, description_vi, source)
-    .run();
+  ).bind(name, name_vi, country, city, website, filmfreeway_url, category, tier,
+    early_deadline, regular_deadline, late_deadline, notification_date, festival_dates,
+    entry_fee_early, entry_fee_regular, description, description_vi, source).run();
 
   return c.json({ id: result.meta.last_row_id }, 201);
 });
 
 // ============================================================
-// Manual fund scrape trigger
-// ============================================================
-app.get('/api/funds/scrape', async (c) => {
-  const result = await scrapeFunds(c.env.DB);
-  return c.json({
-    saved: result.saved,
-    skipped: result.skipped,
-    errors: result.errors,
-    ts: new Date().toISOString(),
-  });
-});
-
-// Manual cron trigger (for testing)
-// ============================================================
-app.get('/api/cron/run', async (c) => {
-  await handleCron(c.env);
-  return c.json({ ok: true, ts: new Date().toISOString() });
-});
-
-// ============================================================
-// MODULE 2: Funds & Grants
+// MODULE 2: Funds & Grants (global)
 // ============================================================
 app.get('/api/funds', async (c) => {
   const { type, focus, region_focus, status = 'active' } = c.req.query();
@@ -137,12 +309,14 @@ app.get('/api/funds', async (c) => {
 
 app.get('/api/funds/:id', async (c) => {
   const row = await c.env.DB.prepare(`SELECT * FROM funds_grants WHERE id = ?`)
-    .bind(c.req.param('id'))
-    .first();
+    .bind(c.req.param('id')).first();
   return row ? c.json(row) : c.json({ error: 'Not found' }, 404);
 });
 
 app.post('/api/funds', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user || user.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
+
   const body = await c.req.json<Record<string, unknown>>();
   const {
     name, name_vi, organization, country, website,
@@ -154,16 +328,14 @@ app.post('/api/funds', async (c) => {
     `INSERT INTO funds_grants (name, name_vi, organization, country, website, type, focus, region_focus,
       max_amount, currency, open_date, deadline, eligibility, eligibility_vi, description, description_vi)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  )
-    .bind(name, name_vi, organization, country, website, type, focus, region_focus,
-      max_amount, currency ?? 'USD', open_date, deadline, eligibility, eligibility_vi,
-      description, description_vi)
-    .run();
+  ).bind(name, name_vi, organization, country, website, type, focus, region_focus,
+    max_amount, currency ?? 'USD', open_date, deadline, eligibility, eligibility_vi,
+    description, description_vi).run();
   return c.json({ id: result.meta.last_row_id }, 201);
 });
 
 // ============================================================
-// MODULE 3: Education & Residency
+// MODULE 3: Education & Residency (global)
 // ============================================================
 app.get('/api/education', async (c) => {
   const { type, status = 'active' } = c.req.query();
@@ -181,12 +353,14 @@ app.get('/api/education', async (c) => {
 
 app.get('/api/education/:id', async (c) => {
   const row = await c.env.DB.prepare(`SELECT * FROM education_residency WHERE id = ?`)
-    .bind(c.req.param('id'))
-    .first();
+    .bind(c.req.param('id')).first();
   return row ? c.json(row) : c.json({ error: 'Not found' }, 404);
 });
 
 app.post('/api/education', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user || user.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
+
   const body = await c.req.json<Record<string, unknown>>();
   const {
     name, name_vi, organization, country, city, website,
@@ -199,19 +373,20 @@ app.post('/api/education', async (c) => {
       duration, application_open, deadline, program_dates, stipend, covers_travel,
       covers_accommodation, eligibility, eligibility_vi, description, description_vi)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  )
-    .bind(name, name_vi, organization, country, city, website, type,
-      duration, application_open, deadline, program_dates, stipend ?? null,
-      covers_travel ? 1 : 0, covers_accommodation ? 1 : 0,
-      eligibility, eligibility_vi, description, description_vi)
-    .run();
+  ).bind(name, name_vi, organization, country, city, website, type,
+    duration, application_open, deadline, program_dates, stipend ?? null,
+    covers_travel ? 1 : 0, covers_accommodation ? 1 : 0,
+    eligibility, eligibility_vi, description, description_vi).run();
   return c.json({ id: result.meta.last_row_id }, 201);
 });
 
 // ============================================================
-// MODULE 4: Monitor Commands (Command Center)
+// MODULE 4: Monitor Commands (per-user)
 // ============================================================
 app.get('/api/monitors', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user) return c.json({ data: [] });
+
   const result = await c.env.DB.prepare(
     `SELECT mc.*,
             CASE mc.ref_table
@@ -228,39 +403,47 @@ app.get('/api/monitors', async (c) => {
      LEFT JOIN festivals f ON mc.ref_table = 'festivals' AND mc.ref_id = f.id
      LEFT JOIN funds_grants fg ON mc.ref_table = 'funds_grants' AND mc.ref_id = fg.id
      LEFT JOIN education_residency er ON mc.ref_table = 'education_residency' AND mc.ref_id = er.id
+     WHERE mc.user_id = ?
      ORDER BY mc.created_at DESC`
-  ).all();
+  ).bind(user.sub).all();
   return c.json({ data: result.results });
 });
 
 app.post('/api/monitors', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
   const body = await c.req.json<Record<string, unknown>>();
   const { target_url, target_name, monitor_type, ref_id, ref_table, watch_for, alert_days_before } = body as any;
 
   const result = await c.env.DB.prepare(
-    `INSERT INTO monitor_commands (target_url, target_name, monitor_type, ref_id, ref_table, watch_for, alert_days_before)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  )
-    .bind(target_url, target_name, monitor_type, ref_id, ref_table, watch_for, alert_days_before ?? 7)
-    .run();
+    `INSERT INTO monitor_commands (user_id, target_url, target_name, monitor_type, ref_id, ref_table, watch_for, alert_days_before)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(user.sub, target_url, target_name, monitor_type, ref_id, ref_table, watch_for, alert_days_before ?? 7).run();
 
   return c.json({ id: result.meta.last_row_id }, 201);
 });
 
 app.delete('/api/monitors/:id', async (c) => {
-  await c.env.DB.prepare(`UPDATE monitor_commands SET is_active = 0 WHERE id = ?`)
-    .bind(c.req.param('id'))
-    .run();
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  await c.env.DB.prepare(
+    `UPDATE monitor_commands SET is_active = 0 WHERE id = ? AND user_id = ?`
+  ).bind(c.req.param('id'), user.sub).run();
   return c.json({ ok: true });
 });
 
 // ============================================================
-// MODULE 5: My Films
+// MODULE 5: My Films (per-user)
 // ============================================================
 app.get('/api/films', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user) return c.json({ data: [] });
+
   const { status, genre } = c.req.query();
-  let query = `SELECT * FROM films WHERE 1=1`;
-  const params: unknown[] = [];
+  let query = `SELECT * FROM films WHERE user_id = ?`;
+  const params: unknown[] = [user.sub];
   if (status) { query += ` AND status = ?`; params.push(status); }
   if (genre)  { query += ` AND genre = ?`;  params.push(genre); }
   query += ` ORDER BY year DESC, title ASC`;
@@ -269,50 +452,65 @@ app.get('/api/films', async (c) => {
 });
 
 app.get('/api/films/:id', async (c) => {
-  const row = await c.env.DB.prepare(`SELECT * FROM films WHERE id = ?`)
-    .bind(c.req.param('id'))
-    .first();
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const row = await c.env.DB.prepare(`SELECT * FROM films WHERE id = ? AND user_id = ?`)
+    .bind(c.req.param('id'), user.sub).first();
   return row ? c.json(row) : c.json({ error: 'Not found' }, 404);
 });
 
 app.post('/api/films', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
   const body = await c.req.json<Record<string, unknown>>();
   const { title, title_vi, year, genre, duration_min, logline, logline_vi,
           director, producer, status, poster_url, trailer_url, notes } = body as any;
   const result = await c.env.DB.prepare(
-    `INSERT INTO films (title, title_vi, year, genre, duration_min, logline, logline_vi,
+    `INSERT INTO films (user_id, title, title_vi, year, genre, duration_min, logline, logline_vi,
       director, producer, status, poster_url, trailer_url, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(title, title_vi, year, genre, duration_min, logline, logline_vi,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(user.sub, title, title_vi, year, genre, duration_min, logline, logline_vi,
     director ?? 'Tri Pham', producer, status ?? 'in-production', poster_url, trailer_url, notes).run();
   return c.json({ id: result.meta.last_row_id }, 201);
 });
 
 app.put('/api/films/:id', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
   const body = await c.req.json<Record<string, unknown>>();
   const { title, title_vi, year, genre, duration_min, logline, logline_vi,
           director, producer, status, poster_url, trailer_url, notes } = body as any;
   await c.env.DB.prepare(
     `UPDATE films SET title=?, title_vi=?, year=?, genre=?, duration_min=?, logline=?, logline_vi=?,
       director=?, producer=?, status=?, poster_url=?, trailer_url=?, notes=?,
-      updated_at=CURRENT_TIMESTAMP WHERE id=?`
+      updated_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=?`
   ).bind(title, title_vi, year, genre, duration_min, logline, logline_vi,
-    director, producer, status, poster_url, trailer_url, notes, c.req.param('id')).run();
+    director, producer, status, poster_url, trailer_url, notes, c.req.param('id'), user.sub).run();
   return c.json({ ok: true });
 });
 
 app.delete('/api/films/:id', async (c) => {
-  await c.env.DB.prepare(`DELETE FROM films WHERE id = ?`).bind(c.req.param('id')).run();
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  await c.env.DB.prepare(`DELETE FROM films WHERE id = ? AND user_id = ?`)
+    .bind(c.req.param('id'), user.sub).run();
   return c.json({ ok: true });
 });
 
 // ============================================================
-// MODULE 5: Submissions
+// MODULE 5: Submissions (per-user)
 // ============================================================
 app.get('/api/submissions', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user) return c.json({ data: [] });
+
   const { film_id, status, ref_table } = c.req.query();
-  let query = `SELECT * FROM submissions WHERE 1=1`;
-  const params: unknown[] = [];
+  let query = `SELECT * FROM submissions WHERE user_id = ?`;
+  const params: unknown[] = [user.sub];
   if (film_id)   { query += ` AND film_id = ?`;   params.push(Number(film_id)); }
   if (status)    { query += ` AND status = ?`;     params.push(status); }
   if (ref_table) { query += ` AND ref_table = ?`;  params.push(ref_table); }
@@ -322,42 +520,55 @@ app.get('/api/submissions', async (c) => {
 });
 
 app.post('/api/submissions', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
   const body = await c.req.json<Record<string, unknown>>();
   const { film_id, film_title, ref_table, ref_id, ref_name, deadline,
           submitted_at, submission_platform, submission_url, entry_fee_paid,
           status, result_date, notes } = body as any;
   const result = await c.env.DB.prepare(
-    `INSERT INTO submissions (film_id, film_title, ref_table, ref_id, ref_name, deadline,
+    `INSERT INTO submissions (user_id, film_id, film_title, ref_table, ref_id, ref_name, deadline,
       submitted_at, submission_platform, submission_url, entry_fee_paid, status, result_date, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(film_id, film_title, ref_table, ref_id, ref_name, deadline,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(user.sub, film_id, film_title, ref_table, ref_id, ref_name, deadline,
     submitted_at, submission_platform ?? 'direct', submission_url, entry_fee_paid,
     status ?? 'draft', result_date, notes).run();
   return c.json({ id: result.meta.last_row_id }, 201);
 });
 
 app.put('/api/submissions/:id', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
   const body = await c.req.json<Record<string, unknown>>();
   const { status, submitted_at, result_date, notes, entry_fee_paid,
           submission_platform, submission_url } = body as any;
   await c.env.DB.prepare(
     `UPDATE submissions SET status=?, submitted_at=?, result_date=?, notes=?,
       entry_fee_paid=?, submission_platform=?, submission_url=?, updated_at=CURRENT_TIMESTAMP
-     WHERE id=?`
+     WHERE id=? AND user_id=?`
   ).bind(status, submitted_at, result_date, notes, entry_fee_paid,
-    submission_platform, submission_url, c.req.param('id')).run();
+    submission_platform, submission_url, c.req.param('id'), user.sub).run();
   return c.json({ ok: true });
 });
 
 app.delete('/api/submissions/:id', async (c) => {
-  await c.env.DB.prepare(`DELETE FROM submissions WHERE id = ?`).bind(c.req.param('id')).run();
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  await c.env.DB.prepare(`DELETE FROM submissions WHERE id = ? AND user_id = ?`)
+    .bind(c.req.param('id'), user.sub).run();
   return c.json({ ok: true });
 });
 
 // ============================================================
-// MODULE 6: Watchlist
+// MODULE 6: Watchlist (per-user)
 // ============================================================
 app.get('/api/watchlist', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user) return c.json({ data: [] });
+
   const result = await c.env.DB.prepare(
     `SELECT w.*,
             CASE w.ref_table
@@ -384,43 +595,54 @@ app.get('/api/watchlist', async (c) => {
      LEFT JOIN festivals f ON w.ref_table = 'festivals' AND w.ref_id = f.id
      LEFT JOIN funds_grants fg ON w.ref_table = 'funds_grants' AND w.ref_id = fg.id
      LEFT JOIN education_residency er ON w.ref_table = 'education_residency' AND w.ref_id = er.id
+     WHERE w.user_id = ?
      ORDER BY deadline ASC`
-  ).all();
+  ).bind(user.sub).all();
   return c.json({ data: result.results });
 });
 
 app.post('/api/watchlist', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
   const body = await c.req.json<Record<string, unknown>>();
   const { ref_table, ref_id, notes } = body as any;
   try {
     const result = await c.env.DB.prepare(
-      `INSERT INTO watchlist (ref_table, ref_id, notes) VALUES (?, ?, ?)`
-    ).bind(ref_table, ref_id, notes ?? null).run();
+      `INSERT INTO watchlist (user_id, ref_table, ref_id, notes) VALUES (?, ?, ?, ?)`
+    ).bind(user.sub, ref_table, ref_id, notes ?? null).run();
     return c.json({ id: result.meta.last_row_id }, 201);
   } catch {
     return c.json({ error: 'Already in watchlist' }, 409);
   }
 });
 
-app.delete('/api/watchlist/:id', async (c) => {
-  await c.env.DB.prepare(`DELETE FROM watchlist WHERE id = ?`)
-    .bind(c.req.param('id'))
-    .run();
+app.delete('/api/watchlist/ref/:ref_table/:ref_id', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  await c.env.DB.prepare(
+    `DELETE FROM watchlist WHERE ref_table = ? AND ref_id = ? AND user_id = ?`
+  ).bind(c.req.param('ref_table'), c.req.param('ref_id'), user.sub).run();
   return c.json({ ok: true });
 });
 
-// Toggle by ref_table + ref_id (used by star buttons in lists)
-app.delete('/api/watchlist/ref/:ref_table/:ref_id', async (c) => {
-  await c.env.DB.prepare(
-    `DELETE FROM watchlist WHERE ref_table = ? AND ref_id = ?`
-  ).bind(c.req.param('ref_table'), c.req.param('ref_id')).run();
+app.delete('/api/watchlist/:id', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  await c.env.DB.prepare(`DELETE FROM watchlist WHERE id = ? AND user_id = ?`)
+    .bind(c.req.param('id'), user.sub).run();
   return c.json({ ok: true });
 });
 
 // ============================================================
-// Stats summary for dashboard cards
+// Dashboard & Stats (global)
 // ============================================================
 app.get('/api/stats', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  const userId = user?.sub ?? null;
+
   const [festivals, funds, education, upcoming7, upcoming30, films, submissions] = await Promise.all([
     c.env.DB.prepare(`SELECT COUNT(*) as count FROM festivals WHERE status = 'active'`).first<{ count: number }>(),
     c.env.DB.prepare(`SELECT COUNT(*) as count FROM funds_grants WHERE status = 'active'`).first<{ count: number }>(),
@@ -443,8 +665,12 @@ app.get('/api/stats', async (c) => {
         SELECT deadline as d FROM education_residency WHERE status='active' AND deadline BETWEEN date('now') AND date('now', '+30 days')
       )
     `).first<{ count: number }>(),
-    c.env.DB.prepare(`SELECT COUNT(*) as count FROM films`).first<{ count: number }>(),
-    c.env.DB.prepare(`SELECT COUNT(*) as count FROM submissions`).first<{ count: number }>(),
+    userId
+      ? c.env.DB.prepare(`SELECT COUNT(*) as count FROM films WHERE user_id = ?`).bind(userId).first<{ count: number }>()
+      : Promise.resolve({ count: 0 }),
+    userId
+      ? c.env.DB.prepare(`SELECT COUNT(*) as count FROM submissions WHERE user_id = ?`).bind(userId).first<{ count: number }>()
+      : Promise.resolve({ count: 0 }),
   ]);
   return c.json({
     festivals: festivals?.count ?? 0,
@@ -457,8 +683,6 @@ app.get('/api/stats', async (c) => {
   });
 });
 
-// ============================================================
-// Upcoming deadlines summary
 app.get('/api/dashboard', async (c) => {
   const result = await c.env.DB.prepare(
     `SELECT 'festival' as type, id, name, regular_deadline as deadline, website, status
@@ -472,7 +696,6 @@ app.get('/api/dashboard', async (c) => {
      ORDER BY deadline ASC
      LIMIT 30`
   ).all();
-
   return c.json({ upcoming: result.results });
 });
 
@@ -485,28 +708,19 @@ app.get('/api/calendar/export', async (c) => {
   const queries: Promise<{ results: any[] }>[] = [];
 
   if (include.includes('festivals')) {
-    queries.push(
-      c.env.DB.prepare(
-        `SELECT 'festival' as type, id, name, regular_deadline as deadline, website
-         FROM festivals WHERE regular_deadline >= date('now') AND status = 'active'`
-      ).all() as Promise<{ results: any[] }>
-    );
+    queries.push(c.env.DB.prepare(
+      `SELECT 'festival' as type, id, name, regular_deadline as deadline, website FROM festivals WHERE regular_deadline >= date('now') AND status = 'active'`
+    ).all() as Promise<{ results: any[] }>);
   }
   if (include.includes('funds')) {
-    queries.push(
-      c.env.DB.prepare(
-        `SELECT 'fund' as type, id, name, deadline, website
-         FROM funds_grants WHERE deadline >= date('now') AND status = 'active'`
-      ).all() as Promise<{ results: any[] }>
-    );
+    queries.push(c.env.DB.prepare(
+      `SELECT 'fund' as type, id, name, deadline, website FROM funds_grants WHERE deadline >= date('now') AND status = 'active'`
+    ).all() as Promise<{ results: any[] }>);
   }
   if (include.includes('education')) {
-    queries.push(
-      c.env.DB.prepare(
-        `SELECT 'education' as type, id, name, deadline, website
-         FROM education_residency WHERE deadline >= date('now') AND status = 'active'`
-      ).all() as Promise<{ results: any[] }>
-    );
+    queries.push(c.env.DB.prepare(
+      `SELECT 'education' as type, id, name, deadline, website FROM education_residency WHERE deadline >= date('now') AND status = 'active'`
+    ).all() as Promise<{ results: any[] }>);
   }
 
   const results = await Promise.all(queries);
@@ -524,12 +738,9 @@ app.get('/api/calendar/export', async (c) => {
 });
 
 // ============================================================
-// Static asset serving (Workers Sites catch-all)
-// Serves the React SPA; falls back to index.html for client-side routing.
-// API paths are never served HTML — they get a JSON 404 instead.
+// Static asset serving
 // ============================================================
 app.get('*', async (c) => {
-  // Guard: unmatched /api/* routes must never return HTML
   if (c.req.path.startsWith('/api/')) {
     return c.json({ error: 'Not found' }, 404);
   }
@@ -547,7 +758,6 @@ app.get('*', async (c) => {
     return await getAssetFromKV(kvEvent, options);
   } catch (e) {
     if (e instanceof NotFoundError) {
-      // SPA fallback: serve index.html for any unmatched path
       const indexRequest = new Request(
         new URL('/index.html', c.req.url).toString(),
         c.req.raw
@@ -572,7 +782,7 @@ app.get('*', async (c) => {
 export default {
   fetch: app.fetch,
 
-  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(handleCron(env));
   },
 };

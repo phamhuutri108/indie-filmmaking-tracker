@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useI18n } from '../i18n';
+import { apiFetch } from '../apiFetch';
 import { DeadlineBadge } from './DeadlineBadge';
 import { Modal, inputStyle, labelStyle, formRowStyle, formGridStyle } from './Modal';
 import type { Fund } from '../types';
@@ -217,7 +218,7 @@ function AddFundModal({
 }
 
 // ─── Main FundList ────────────────────────────────────────────────────────────
-export function FundList({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwner: boolean }) {
+export function FundList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI18n>; isOwner: boolean; isLoggedIn: boolean }) {
   const [items, setItems] = useState<Fund[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -237,7 +238,7 @@ export function FundList({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwne
   };
 
   const loadWatchlist = () => {
-    fetch(`${API_BASE}/watchlist`)
+    apiFetch(`${API_BASE}/watchlist`)
       .then((r) => r.json() as Promise<{ data: Array<{ ref_table: string; ref_id: number }> }>)
       .then((d) => {
         const ids = new Set(
@@ -251,12 +252,11 @@ export function FundList({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwne
   const toggleStar = async (e: React.MouseEvent, fundId: number) => {
     e.stopPropagation();
     if (watchlistIds.has(fundId)) {
-      await fetch(`${API_BASE}/watchlist/ref/funds_grants/${fundId}`, { method: 'DELETE' });
+      await apiFetch(`${API_BASE}/watchlist/ref/funds_grants/${fundId}`, { method: 'DELETE' });
       setWatchlistIds((prev) => { const s = new Set(prev); s.delete(fundId); return s; });
     } else {
-      await fetch(`${API_BASE}/watchlist`, {
+      await apiFetch(`${API_BASE}/watchlist`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ref_table: 'funds_grants', ref_id: fundId }),
       });
       setWatchlistIds((prev) => new Set([...prev, fundId]));
@@ -368,7 +368,7 @@ export function FundList({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwne
                   )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-                  {isOwner && (
+                  {isLoggedIn && (
                     <button
                       onClick={(e) => toggleStar(e, f.id)}
                       title={watchlistIds.has(f.id) ? 'Remove from watchlist' : 'Add to watchlist'}

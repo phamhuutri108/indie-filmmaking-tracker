@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useI18n } from '../i18n';
+import { apiFetch } from '../apiFetch';
 import { Modal, inputStyle, labelStyle, formRowStyle, formGridStyle } from './Modal';
 import type { Film } from '../types';
 
@@ -244,9 +245,9 @@ function FilmForm({
       duration_min: form.duration_min ? Number(form.duration_min) : null,
     };
     if (initial?.id) {
-      await fetch(`${API_BASE}/films/${initial.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      await apiFetch(`${API_BASE}/films/${initial.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     } else {
-      await fetch(`${API_BASE}/films`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      await apiFetch(`${API_BASE}/films`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     }
     setSaving(false);
     onSave();
@@ -336,8 +337,8 @@ export function MyFilms({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwner
 
   const load = async () => {
     setLoading(true);
-    const res = await fetch(`${API_BASE}/films`);
-    const json = await res.json<{ data: Film[] }>();
+    const res = await apiFetch(`${API_BASE}/films`);
+    const json = await res.json() as { data: Film[] };
     setFilms(json.data ?? []);
     setLoading(false);
   };
@@ -354,7 +355,7 @@ export function MyFilms({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwner
 
   const handleDelete = async (film: Film) => {
     if (!confirm(`Delete "${film.title}"?`)) return;
-    await fetch(`${API_BASE}/films/${film.id}`, { method: 'DELETE' });
+    await apiFetch(`${API_BASE}/films/${film.id}`, { method: 'DELETE' });
     setSelected(null);
     load();
   };

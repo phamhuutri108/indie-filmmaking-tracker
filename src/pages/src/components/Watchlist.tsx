@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useI18n } from '../i18n';
+import { apiFetch } from '../apiFetch';
 import { DeadlineBadge } from './DeadlineBadge';
 import type { WatchlistItem } from '../types';
 
@@ -24,7 +25,7 @@ export function Watchlist({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwn
 
   const load = () => {
     setLoading(true);
-    fetch(`${API_BASE}/watchlist`)
+    apiFetch(`${API_BASE}/watchlist`)
       .then((r) => r.json() as Promise<{ data: WatchlistItem[] }>)
       .then((d) => setItems(d.data ?? []))
       .catch(() => setItems([]))
@@ -34,7 +35,7 @@ export function Watchlist({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwn
   useEffect(() => { load(); }, []);
 
   const remove = async (item: WatchlistItem) => {
-    await fetch(`${API_BASE}/watchlist/${item.id}`, { method: 'DELETE' });
+    await apiFetch(`${API_BASE}/watchlist/${item.id}`, { method: 'DELETE' });
     load();
   };
 

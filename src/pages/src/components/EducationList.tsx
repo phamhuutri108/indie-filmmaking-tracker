@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useI18n } from '../i18n';
+import { apiFetch } from '../apiFetch';
 import { DeadlineBadge } from './DeadlineBadge';
 import { Modal, inputStyle, labelStyle, formRowStyle, formGridStyle } from './Modal';
 import type { Education } from '../types';
@@ -233,7 +234,7 @@ function AddEducationModal({
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
-export function EducationList({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwner: boolean }) {
+export function EducationList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI18n>; isOwner: boolean; isLoggedIn: boolean }) {
   const [items, setItems] = useState<Education[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -252,7 +253,7 @@ export function EducationList({ t, isOwner }: { t: ReturnType<typeof useI18n>; i
   };
 
   const loadWatchlist = () => {
-    fetch(`${API_BASE}/watchlist`)
+    apiFetch(`${API_BASE}/watchlist`)
       .then((r) => r.json() as Promise<{ data: Array<{ ref_table: string; ref_id: number }> }>)
       .then((d) => {
         const ids = new Set(
@@ -266,12 +267,11 @@ export function EducationList({ t, isOwner }: { t: ReturnType<typeof useI18n>; i
   const toggleStar = async (ev: React.MouseEvent, eduId: number) => {
     ev.stopPropagation();
     if (watchlistIds.has(eduId)) {
-      await fetch(`${API_BASE}/watchlist/ref/education_residency/${eduId}`, { method: 'DELETE' });
+      await apiFetch(`${API_BASE}/watchlist/ref/education_residency/${eduId}`, { method: 'DELETE' });
       setWatchlistIds((prev) => { const s = new Set(prev); s.delete(eduId); return s; });
     } else {
-      await fetch(`${API_BASE}/watchlist`, {
+      await apiFetch(`${API_BASE}/watchlist`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ref_table: 'education_residency', ref_id: eduId }),
       });
       setWatchlistIds((prev) => new Set([...prev, eduId]));
@@ -361,7 +361,7 @@ export function EducationList({ t, isOwner }: { t: ReturnType<typeof useI18n>; i
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-                  {isOwner && (
+                  {isLoggedIn && (
                     <button
                       onClick={(ev) => toggleStar(ev, e.id)}
                       title={watchlistIds.has(e.id) ? 'Remove from watchlist' : 'Add to watchlist'}

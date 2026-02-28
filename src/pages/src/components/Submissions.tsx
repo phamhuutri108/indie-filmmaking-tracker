@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useI18n } from '../i18n';
+import { apiFetch } from '../apiFetch';
 import { DeadlineBadge } from './DeadlineBadge';
 import { Modal, inputStyle, labelStyle, formRowStyle, formGridStyle } from './Modal';
 import type { Film, Submission } from '../types';
@@ -165,8 +166,8 @@ function SubmissionForm({
       funds_grants: '/api/funds?status=active',
       education_residency: '/api/education?status=active',
     };
-    fetch(endpoints[refTable])
-      .then(r => r.json<{ data: { id: number; name: string; regular_deadline?: string; deadline?: string }[] }>())
+    apiFetch(endpoints[refTable])
+      .then(r => r.json() as Promise<{ data: { id: number; name: string; regular_deadline?: string; deadline?: string }[] }>)
       .then(json => {
         setTargets((json.data ?? []).map(x => ({
           id: x.id,
@@ -201,13 +202,13 @@ function SubmissionForm({
     };
 
     if (initial?.id) {
-      await fetch(`${API_BASE}/submissions/${initial.id}`, {
+      await apiFetch(`${API_BASE}/submissions/${initial.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
     } else {
-      await fetch(`${API_BASE}/submissions`, {
+      await apiFetch(`${API_BASE}/submissions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -331,12 +332,12 @@ export function Submissions({ t, isOwner }: { t: ReturnType<typeof useI18n>; isO
   const load = async () => {
     setLoading(true);
     const [subsRes, filmsRes] = await Promise.all([
-      fetch(`${API_BASE}/submissions`),
-      fetch(`${API_BASE}/films`),
+      apiFetch(`${API_BASE}/submissions`),
+      apiFetch(`${API_BASE}/films`),
     ]);
     const [subsJson, filmsJson] = await Promise.all([
-      subsRes.json<{ data: Submission[] }>(),
-      filmsRes.json<{ data: Film[] }>(),
+      subsRes.json() as Promise<{ data: Submission[] }>,
+      filmsRes.json() as Promise<{ data: Film[] }>,
     ]);
     setSubmissions(subsJson.data ?? []);
     setFilms(filmsJson.data ?? []);
@@ -363,7 +364,7 @@ export function Submissions({ t, isOwner }: { t: ReturnType<typeof useI18n>; isO
 
   const handleDelete = async (sub: Submission) => {
     if (!confirm(`Delete this submission?`)) return;
-    await fetch(`${API_BASE}/submissions/${sub.id}`, { method: 'DELETE' });
+    await apiFetch(`${API_BASE}/submissions/${sub.id}`, { method: 'DELETE' });
     load();
   };
 

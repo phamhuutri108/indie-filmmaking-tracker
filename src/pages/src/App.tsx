@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useI18n, type Lang } from './i18n';
 import { Dashboard } from './components/Dashboard';
 import { FestivalList } from './components/FestivalList';
@@ -8,7 +8,8 @@ import { MonitorList } from './components/MonitorList';
 import { MyFilms } from './components/MyFilms';
 import { Submissions } from './components/Submissions';
 import { Watchlist } from './components/Watchlist';
-import { AuthGate, useAuth } from './components/AuthGate';
+import { AuthGate, useAuth, getAuthUserName } from './components/AuthGate';
+import { decodeJWT } from './apiFetch';
 
 type Tab = 'dashboard' | 'festivals' | 'funds' | 'education' | 'monitors' | 'films' | 'submissions' | 'watchlist';
 
@@ -18,8 +19,25 @@ export default function App() {
   const t = useI18n(lang);
   const { role, login, logout } = useAuth();
   const isOwner = role === 'owner';
+  // Members and owners can edit their own per-user data
+  const isLoggedIn = role === 'owner' || role === 'member';
+
+  // Handle Google OAuth callback — URL contains ?token=<jwt>
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    if (token) {
+      const payload = decodeJWT(token);
+      if (payload) {
+        login(payload.role as 'owner' | 'member', token);
+      }
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   if (!role) return <AuthGate onAuth={login} />;
+
+  const userName = getAuthUserName();
 
   const tabs: { key: Tab; label: string; icon: string }[] = [
     { key: 'dashboard', label: t.nav.dashboard, icon: '📊' },
@@ -31,6 +49,11 @@ export default function App() {
     { key: 'submissions', label: t.nav.submissions, icon: '📋' },
     { key: 'watchlist', label: t.watchlist.title, icon: '⭐' },
   ];
+
+  const roleBadge =
+    isOwner ? '🔑 Owner'
+    : role === 'member' ? `👤 ${userName ?? 'Member'}`
+    : '👁 Guest';
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8f9fa', fontFamily: "'Montserrat', system-ui, -apple-system, sans-serif" }}>
@@ -58,10 +81,11 @@ export default function App() {
             fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
             padding: '3px 10px', borderRadius: 20,
             background: isOwner ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)',
-            color: isOwner ? '#fff' : 'rgba(255,255,255,0.6)',
+            color: isOwner ? '#fff' : 'rgba(255,255,255,0.75)',
             border: '1px solid rgba(255,255,255,0.25)',
+            maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
-            {isOwner ? '🔑 Owner' : '👁 Guest'}
+            {roleBadge}
           </span>
           <button
             onClick={() => setLang(lang === 'en' ? 'vi' : 'en')}
@@ -75,7 +99,7 @@ export default function App() {
           </button>
           <button
             onClick={logout}
-            title="Switch role"
+            title="Sign out / Switch role"
             style={{
               background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)',
               border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6,
@@ -126,14 +150,14 @@ export default function App() {
 
       {/* Content */}
       <main style={{ maxWidth: 960, margin: '0 auto', padding: '28px 16px' }}>
-        {tab === 'dashboard' && <Dashboard t={t} />}
-        {tab === 'festivals' && <FestivalList t={t} isOwner={isOwner} />}
-        {tab === 'funds' && <FundList t={t} isOwner={isOwner} />}
-        {tab === 'education' && <EducationList t={t} isOwner={isOwner} />}
-        {tab === 'monitors' && <MonitorList t={t} isOwner={isOwner} />}
-        {tab === 'films' && <MyFilms t={t} isOwner={isOwner} />}
-        {tab === 'submissions' && <Submissions t={t} isOwner={isOwner} />}
-        {tab === 'watchlist' && <Watchlist t={t} isOwner={isOwner} />}
+        {tab === 'dashboard'   && <Dashboard t={t} />}
+        {tab === 'festivals'   && <FestivalList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} />}
+        {tab === 'funds'       && <FundList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} />}
+        {tab === 'education'   && <EducationList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} />}
+        {tab === 'monitors'    && <MonitorList t={t} isOwner={isLoggedIn} />}
+        {tab === 'films'       && <MyFilms t={t} isOwner={isLoggedIn} />}
+        {tab === 'submissions' && <Submissions t={t} isOwner={isLoggedIn} />}
+        {tab === 'watchlist'   && <Watchlist t={t} isOwner={isLoggedIn} />}
       </main>
     </div>
   );
