@@ -3215,6 +3215,9 @@ app.get("/api/dashboard", async (c) => {
   return c.json({ upcoming: result.results });
 });
 app.get("*", async (c) => {
+  if (c.req.path.startsWith("/api/")) {
+    return c.json({ error: "Not found" }, 404);
+  }
   const kvEvent = {
     request: c.req.raw,
     waitUntil: /* @__PURE__ */ __name((p) => c.executionCtx.waitUntil(p), "waitUntil")

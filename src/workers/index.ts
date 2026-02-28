@@ -195,9 +195,15 @@ app.get('/api/dashboard', async (c) => {
 
 // ============================================================
 // Static asset serving (Workers Sites catch-all)
-// Serves the React SPA; falls back to index.html for client-side routing
+// Serves the React SPA; falls back to index.html for client-side routing.
+// API paths are never served HTML — they get a JSON 404 instead.
 // ============================================================
 app.get('*', async (c) => {
+  // Guard: unmatched /api/* routes must never return HTML
+  if (c.req.path.startsWith('/api/')) {
+    return c.json({ error: 'Not found' }, 404);
+  }
+
   const kvEvent = {
     request: c.req.raw,
     waitUntil: (p: Promise<unknown>) => c.executionCtx.waitUntil(p),
