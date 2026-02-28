@@ -5,6 +5,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { getAssetFromKV, NotFoundError } from '@cloudflare/kv-asset-handler';
 import { handleCron } from './cron';
+import { scrapeAsianFilmFestivals } from './scraper';
 
 // Injected by wrangler at build time when [site] is configured
 // @ts-ignore
@@ -30,6 +31,19 @@ app.use('/api/*', cors({ origin: '*' }));
 app.get('/api/health', (c) =>
   c.json({ status: 'ok', ts: new Date().toISOString() })
 );
+
+// ============================================================
+// Manual scrape trigger
+// ============================================================
+app.get('/api/scrape', async (c) => {
+  const result = await scrapeAsianFilmFestivals(c.env.DB);
+  return c.json({
+    saved: result.saved,
+    skipped: result.skipped,
+    errors: result.errors,
+    ts: new Date().toISOString(),
+  });
+});
 
 // ============================================================
 // MODULE 1: Festivals

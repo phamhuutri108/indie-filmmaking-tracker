@@ -3061,6 +3061,15 @@ app.get(
   "/api/health",
   (c) => c.json({ status: "ok", ts: (/* @__PURE__ */ new Date()).toISOString() })
 );
+app.get("/api/scrape", async (c) => {
+  const result = await scrapeAsianFilmFestivals(c.env.DB);
+  return c.json({
+    saved: result.saved,
+    skipped: result.skipped,
+    errors: result.errors,
+    ts: (/* @__PURE__ */ new Date()).toISOString()
+  });
+});
 app.get("/api/festivals", async (c) => {
   const { category, tier, status = "active", limit = "20", offset = "0" } = c.req.query();
   let query = `SELECT * FROM festivals WHERE status = ?`;
