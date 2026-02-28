@@ -156,14 +156,17 @@ export default function App() {
             )}
 
             {/* Role badge */}
-            <span style={{
-              fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
-              padding: '3px 10px', borderRadius: 20,
-              background: isOwner ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)',
-              color: isOwner ? '#fff' : 'rgba(255,255,255,0.75)',
-              border: '1px solid rgba(255,255,255,0.25)',
-              maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
+            <span
+              className={!isLoggedIn ? 'header-role-guest' : undefined}
+              style={{
+                fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
+                padding: '3px 10px', borderRadius: 20,
+                background: isOwner ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)',
+                color: isOwner ? '#fff' : 'rgba(255,255,255,0.75)',
+                border: '1px solid rgba(255,255,255,0.25)',
+                maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}
+            >
               {roleBadge}
             </span>
 
