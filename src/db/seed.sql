@@ -1,13 +1,9 @@
 -- IFT Seed Data
 -- Sample data for development (dates in 2026/2027)
 
--- Clear existing data first
-DELETE FROM festivals;
-DELETE FROM funds_grants;
-DELETE FROM education_residency;
-
 -- Festivals (curated: FIAPF A-list + major international + Asia focus)
-INSERT INTO festivals (name, name_vi, country, city, website, category, tier, early_deadline, regular_deadline, description, description_vi, source) VALUES
+-- Uses INSERT OR IGNORE — safe to re-run, won't overwrite existing data
+INSERT OR IGNORE INTO festivals (name, name_vi, country, city, website, category, tier, early_deadline, regular_deadline, description, description_vi, source) VALUES
 -- FIAPF A-list Competitive
 ('Cannes Film Festival 2026', 'Liên hoan phim Cannes 2026', 'France', 'Cannes', 'https://festival-cannes.com', 'narrative', 'A-list', '2026-01-15', '2026-02-15', 'The world''s most prestigious film festival. Palme d''Or competition.', 'Liên hoan phim uy tín nhất thế giới. Giải Cành cọ vàng.', 'manual'),
 ('Berlin International Film Festival 2027', 'Berlinale 2027', 'Germany', 'Berlin', 'https://berlinale.de', 'narrative', 'A-list', '2026-09-15', '2026-10-15', 'One of the world''s leading film festivals. Golden Bear competition.', 'Một trong những LHP hàng đầu thế giới. Giải Gấu vàng.', 'manual'),
@@ -47,7 +43,7 @@ INSERT INTO festivals (name, name_vi, country, city, website, category, tier, ea
 ('Jogja-NETPAC Asian Film Festival 2026', 'JAFF 2026', 'Indonesia', 'Yogyakarta', 'https://jaff-filmfest.org', 'narrative', 'regional', '2026-07-01', '2026-08-01', 'Indonesia''s premier festival dedicated to Asian cinema.', 'LHP hàng đầu Indonesia dành cho điện ảnh châu Á.', 'manual');
 
 -- Funds & Grants
-INSERT INTO funds_grants (name, name_vi, organization, country, website, type, focus, region_focus, max_amount, currency, deadline, eligibility, eligibility_vi, description, description_vi) VALUES
+INSERT OR IGNORE INTO funds_grants (name, name_vi, organization, country, website, type, focus, region_focus, max_amount, currency, deadline, eligibility, eligibility_vi, description, description_vi) VALUES
 ('Hubert Bals Fund', 'Quỹ Hubert Bals', 'International Film Festival Rotterdam (IFFR)', 'Netherlands', 'https://iffr.com/en/professionals/hubert-bals-fund', 'development', 'narrative', 'global', 10000, 'EUR', '2026-09-01', 'Filmmakers from Asia, Africa, Latin America, Middle East, and Eastern Europe.', 'Nhà làm phim từ châu Á, châu Phi, Mỹ Latinh, Trung Đông và Đông Âu.', 'Supports script and project development for feature films and creative documentaries from developing countries.', 'Hỗ trợ phát triển kịch bản và dự án phim dài và phim tài liệu sáng tạo từ các nước đang phát triển.'),
 ('IDFA Bertha Fund', 'Quỹ IDFA Bertha', 'International Documentary Film Festival Amsterdam (IDFA)', 'Netherlands', 'https://www.idfa.nl/en/info/idfa-bertha-fund', 'production', 'documentary', 'global', 40000, 'EUR', '2026-05-01', 'Documentary filmmakers from developing countries.', 'Nhà làm phim tài liệu từ các nước đang phát triển.', 'Supports documentary filmmakers from Africa, Asia, Latin America, Middle East and parts of Europe.', 'Hỗ trợ nhà làm phim tài liệu từ châu Phi, châu Á, Mỹ Latinh, Trung Đông và một số nước châu Âu.'),
 ('Sundance Documentary Fund', 'Quỹ phim tài liệu Sundance', 'Sundance Institute', 'USA', 'https://www.sundance.org/programs/documentary-fund', 'production', 'documentary', 'global', 30000, 'USD', '2026-06-15', 'Documentary filmmakers with a focus on social justice issues.', 'Nhà làm phim tài liệu tập trung vào các vấn đề công bằng xã hội.', 'Supports global documentary projects that address pressing social, cultural, and political issues.', 'Hỗ trợ các dự án phim tài liệu quốc tế đề cập đến các vấn đề xã hội, văn hóa và chính trị cấp bách.'),
@@ -65,7 +61,7 @@ INSERT INTO funds_grants (name, name_vi, organization, country, website, type, f
 ('Tribeca Film Institute Documentary Fund', 'Quỹ phim tài liệu Tribeca Film Institute', 'Tribeca Film Institute', 'USA', 'https://www.tribecafilminstitute.org', 'production', 'documentary', 'global', 25000, 'USD', '2026-05-15', 'Documentary filmmakers working on social-issue films.', 'Nhà làm phim tài liệu làm phim về vấn đề xã hội.', 'Supports documentary films that illuminate contemporary social issues and amplify underrepresented voices.', 'Hỗ trợ phim tài liệu phản ánh các vấn đề xã hội đương đại và khuếch đại những tiếng nói ít được đại diện.');
 
 -- Education & Residencies
-INSERT INTO education_residency (name, name_vi, organization, country, city, website, type, duration, deadline, description, description_vi) VALUES
+INSERT OR IGNORE INTO education_residency (name, name_vi, organization, country, city, website, type, duration, deadline, description, description_vi) VALUES
 ('Berlinale Talents 2027', 'Berlinale Talents 2027', 'Berlin International Film Festival', 'Germany', 'Berlin', 'https://berlinale-talents.de', 'lab', '1 week', '2026-10-15', 'International talent development program at the Berlin Film Festival.', 'Chương trình phát triển tài năng quốc tế tại Liên hoan phim Berlin.'),
 ('Cannes Cinéfondation Residency 2026', 'Khu lưu trú Cinéfondation Cannes 2026', 'Festival de Cannes', 'France', 'Paris', 'https://cinefondation.com', 'residency', '5 months', '2026-03-31', '5-month residency in Paris for filmmakers developing their first or second feature.', 'Khu lưu trú 5 tháng tại Paris cho các nhà làm phim đang phát triển bộ phim dài đầu tiên hoặc thứ hai.'),
 ('Busan Asian Film School 2026', 'Trường phim châu Á Busan 2026', 'Asian Film Academy', 'South Korea', 'Busan', 'https://asianfilmacademy.kr', 'workshop', '2 weeks', '2026-05-31', 'Intensive filmmaking program during BIFF.', 'Chương trình làm phim chuyên sâu trong BIFF.');
