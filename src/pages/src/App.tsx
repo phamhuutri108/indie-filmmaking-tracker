@@ -42,9 +42,9 @@ export default function App() {
           boxShadow: '0 2px 8px rgba(0,74,173,0.3)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.02em' }}>🎬 IFT</span>
-          <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', borderLeft: '1px solid rgba(255,255,255,0.3)', paddingLeft: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontWeight: 800, fontSize: 20, letterSpacing: '0.08em', fontFamily: "'Montserrat', sans-serif" }}>IFT</span>
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', borderLeft: '1px solid rgba(255,255,255,0.3)', paddingLeft: 12, letterSpacing: '0.12em', fontWeight: 600, textTransform: 'uppercase' }}>
             Indie Filmmaking Tracker
           </span>
         </div>
