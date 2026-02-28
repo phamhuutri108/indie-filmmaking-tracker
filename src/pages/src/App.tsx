@@ -132,7 +132,7 @@ export default function App() {
               rel="noreferrer"
               style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', textDecoration: 'none', whiteSpace: 'nowrap' }}
             >
-              My website
+              MY WEBSITE
             </a>
           </div>
 

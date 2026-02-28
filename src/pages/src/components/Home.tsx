@@ -72,12 +72,13 @@ const FEATURES: Record<Lang, { title: string; desc: string }[]> = {
   ],
 };
 
-const BIO: Record<Lang, { p1: string; p2: string; p3: JSX.Element; p4: JSX.Element | string; featuresTitle: string; feedbackTitle: string; feedbackSubtitle: string; namePlaceholder: string; emailPlaceholder: string; messagePlaceholder: string; submitLabel: string; successMsg: string; errorMsg: string }> = {
+const BIO: Record<Lang, { p1: string; p2: string; p3: JSX.Element; p4: string; moreAboutMe: string; featuresTitle: string; feedbackTitle: string; feedbackSubtitle: string; namePlaceholder: string; emailPlaceholder: string; messagePlaceholder: string; submitLabel: string; successMsg: string; errorMsg: string }> = {
   vi: {
     p1: 'Là một người học và làm phim độc lập, giấc mơ đưa tác phẩm đến các liên hoan phim quốc tế không chỉ của riêng tôi — mà còn của rất nhiều bạn trẻ khác. Nhưng thực tế là thông tin về các liên hoan phim, quỹ điện ảnh, deadline nộp phim, workshop về điện ảnh,... vừa tản mát, vừa khó tiếp cận. Và hầu hết những người mới bắt đầu như tôi và bạn đều chưa có người dẫn đường.',
     p2: 'Indie Filmmaking Tracker ra đời từ chính sự bất cập đó — một công cụ giúp người làm phim trẻ chủ động theo dõi cơ hội, thay vì mò mẫm giữa một đại dương thông tin trên internet.',
     p3: (<>Tôi không có nền tảng lập trình. Toàn bộ website này được xây dựng với sự hỗ trợ của{' '}<a href="https://claude.ai" target="_blank" rel="noreferrer" style={{ color: '#004aad' }}>Claude AI</a>.{' '}Bạn có thể xem mã nguồn tại{' '}<a href="https://github.com/phamhuutri108/indie-filmmaking-tracker" target="_blank" rel="noreferrer" style={{ color: '#004aad' }}>GitHub</a>.</>),
-    p4: (<>Cảm ơn bạn đã ghé thăm. Tất cả những gì tôi muốn là đóng góp một phần nhỏ cho cộng đồng làm phim. Web vẫn đang được cập nhật và hoàn thiện — mọi góp ý đều được trân trọng.<br /><a href="https://www.phamhuutri.com" target="_blank" rel="noreferrer" style={{ color: '#004aad' }}>Tìm hiểu thêm về tôi →</a></>),
+    p4: 'Cảm ơn bạn đã ghé thăm. Tất cả những gì tôi muốn là đóng góp một phần nhỏ cho cộng đồng làm phim. Web vẫn đang được cập nhật và hoàn thiện — mọi góp ý đều được trân trọng.',
+    moreAboutMe: 'Tìm hiểu thêm về tôi →',
     featuresTitle: 'Tính năng',
     feedbackTitle: 'Góp ý',
     feedbackSubtitle: 'Bạn có ý kiến gì về ứng dụng? Tôi luôn lắng nghe.',
@@ -92,7 +93,8 @@ const BIO: Record<Lang, { p1: string; p2: string; p3: JSX.Element; p4: JSX.Eleme
     p1: 'As an independent filmmaker and student, the dream of bringing my work to international film festivals is not mine alone — it is shared by many young people. Yet the reality is that information about festivals, film funds, submission deadlines, and workshops is scattered and hard to access. And most of us who are just starting out have no one to guide us.',
     p2: 'Indie Filmmaking Tracker was born from exactly that gap — a tool to help young filmmakers proactively track opportunities, instead of searching through an ocean of information on the internet.',
     p3: (<>I have no programming background. This entire website was built with the help of{' '}<a href="https://claude.ai" target="_blank" rel="noreferrer" style={{ color: '#004aad' }}>Claude AI</a>.{' '}You can view the source code on{' '}<a href="https://github.com/phamhuutri108/indie-filmmaking-tracker" target="_blank" rel="noreferrer" style={{ color: '#004aad' }}>GitHub</a>.</>),
-    p4: (<>Thank you for visiting. All I want is to make a small contribution to the filmmaking community. The website is still being updated and improved — all feedback is appreciated.<br /><a href="https://www.phamhuutri.com" target="_blank" rel="noreferrer" style={{ color: '#004aad' }}>More about me →</a></>),
+    p4: 'Thank you for visiting. All I want is to make a small contribution to the filmmaking community. The website is still being updated and improved — all feedback is appreciated.',
+    moreAboutMe: 'More about me →',
     featuresTitle: 'Features',
     feedbackTitle: 'Feedback',
     feedbackSubtitle: 'Have thoughts on the app? I\'d love to hear from you.',
@@ -152,13 +154,23 @@ export function Home({ lang }: { lang: Lang }) {
           <p style={{ ...pStyle, margin: 0 }}>{bio.p4}</p>
         </div>
 
-        <a href="https://www.phamhuutri.com" target="_blank" rel="noreferrer" style={{ flexShrink: 0, display: 'block' }}>
-          <img
-            src="/profile-image.jpeg"
-            alt="Tri Pham"
-            style={{ width: 270, aspectRatio: '3/4', objectFit: 'cover', objectPosition: 'top', borderRadius: 8, display: 'block' }}
-          />
-        </a>
+        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+          <a href="https://www.phamhuutri.com" target="_blank" rel="noreferrer" style={{ display: 'block' }}>
+            <img
+              src="/profile-image.jpeg"
+              alt="Tri Pham"
+              style={{ width: 270, aspectRatio: '3/4', objectFit: 'cover', objectPosition: 'top', borderRadius: 8, display: 'block' }}
+            />
+          </a>
+          <a
+            href="https://www.phamhuutri.com"
+            target="_blank"
+            rel="noreferrer"
+            style={{ fontSize: 13, color: '#004aad', textDecoration: 'none', marginTop: 10, fontWeight: 600 }}
+          >
+            {bio.moreAboutMe}
+          </a>
+        </div>
       </div>
 
       {/* Divider */}
