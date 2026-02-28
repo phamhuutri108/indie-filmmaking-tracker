@@ -120,6 +120,26 @@ app.get('/api/funds/:id', async (c) => {
   return row ? c.json(row) : c.json({ error: 'Not found' }, 404);
 });
 
+app.post('/api/funds', async (c) => {
+  const body = await c.req.json<Record<string, unknown>>();
+  const {
+    name, name_vi, organization, country, website,
+    type, focus, region_focus, max_amount, currency,
+    open_date, deadline, eligibility, eligibility_vi,
+    description, description_vi,
+  } = body as any;
+  const result = await c.env.DB.prepare(
+    `INSERT INTO funds_grants (name, name_vi, organization, country, website, type, focus, region_focus,
+      max_amount, currency, open_date, deadline, eligibility, eligibility_vi, description, description_vi)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  )
+    .bind(name, name_vi, organization, country, website, type, focus, region_focus,
+      max_amount, currency ?? 'USD', open_date, deadline, eligibility, eligibility_vi,
+      description, description_vi)
+    .run();
+  return c.json({ id: result.meta.last_row_id }, 201);
+});
+
 // ============================================================
 // MODULE 3: Education & Residency
 // ============================================================
@@ -142,6 +162,28 @@ app.get('/api/education/:id', async (c) => {
     .bind(c.req.param('id'))
     .first();
   return row ? c.json(row) : c.json({ error: 'Not found' }, 404);
+});
+
+app.post('/api/education', async (c) => {
+  const body = await c.req.json<Record<string, unknown>>();
+  const {
+    name, name_vi, organization, country, city, website,
+    type, duration, application_open, deadline, program_dates,
+    stipend, covers_travel, covers_accommodation,
+    eligibility, eligibility_vi, description, description_vi,
+  } = body as any;
+  const result = await c.env.DB.prepare(
+    `INSERT INTO education_residency (name, name_vi, organization, country, city, website, type,
+      duration, application_open, deadline, program_dates, stipend, covers_travel,
+      covers_accommodation, eligibility, eligibility_vi, description, description_vi)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  )
+    .bind(name, name_vi, organization, country, city, website, type,
+      duration, application_open, deadline, program_dates, stipend ?? null,
+      covers_travel ? 1 : 0, covers_accommodation ? 1 : 0,
+      eligibility, eligibility_vi, description, description_vi)
+    .run();
+  return c.json({ id: result.meta.last_row_id }, 201);
 });
 
 // ============================================================
@@ -175,6 +217,43 @@ app.delete('/api/monitors/:id', async (c) => {
   return c.json({ ok: true });
 });
 
+// ============================================================
+// Stats summary for dashboard cards
+// ============================================================
+app.get('/api/stats', async (c) => {
+  const [festivals, funds, education, upcoming7, upcoming30] = await Promise.all([
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM festivals WHERE status = 'active'`).first<{ count: number }>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM funds_grants WHERE status = 'active'`).first<{ count: number }>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM education_residency WHERE status = 'active'`).first<{ count: number }>(),
+    c.env.DB.prepare(`
+      SELECT COUNT(*) as count FROM (
+        SELECT regular_deadline as d FROM festivals WHERE status='active' AND regular_deadline BETWEEN date('now') AND date('now', '+7 days')
+        UNION ALL
+        SELECT deadline as d FROM funds_grants WHERE status='active' AND deadline BETWEEN date('now') AND date('now', '+7 days')
+        UNION ALL
+        SELECT deadline as d FROM education_residency WHERE status='active' AND deadline BETWEEN date('now') AND date('now', '+7 days')
+      )
+    `).first<{ count: number }>(),
+    c.env.DB.prepare(`
+      SELECT COUNT(*) as count FROM (
+        SELECT regular_deadline as d FROM festivals WHERE status='active' AND regular_deadline BETWEEN date('now') AND date('now', '+30 days')
+        UNION ALL
+        SELECT deadline as d FROM funds_grants WHERE status='active' AND deadline BETWEEN date('now') AND date('now', '+30 days')
+        UNION ALL
+        SELECT deadline as d FROM education_residency WHERE status='active' AND deadline BETWEEN date('now') AND date('now', '+30 days')
+      )
+    `).first<{ count: number }>(),
+  ]);
+  return c.json({
+    festivals: festivals?.count ?? 0,
+    funds: funds?.count ?? 0,
+    education: education?.count ?? 0,
+    upcoming7: upcoming7?.count ?? 0,
+    upcoming30: upcoming30?.count ?? 0,
+  });
+});
+
+// ============================================================
 // Upcoming deadlines summary
 app.get('/api/dashboard', async (c) => {
   const result = await c.env.DB.prepare(
