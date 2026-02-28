@@ -83,7 +83,7 @@ export function AuthGate({ onAuth }: { onAuth: (role: Role, token?: string) => v
       fontFamily: "'Montserrat', system-ui, sans-serif",
       padding: 24,
     }}>
-      <img src="/ift-logo.png" alt="IFT" style={{ height: 240, marginBottom: 28 }} />
+      <img src="/ift-logo_landscape.png" alt="IFT" style={{ width: 300, maxWidth: '80vw', marginBottom: 28 }} />
 
       <div style={{
         background: '#fff', borderRadius: 12,
@@ -93,8 +93,9 @@ export function AuthGate({ onAuth }: { onAuth: (role: Role, token?: string) => v
 
         {mode === 'choose' && (
           <>
-            <h2 style={{ margin: '0 0 6px', fontSize: 20, color: '#1a202c', textAlign: 'center' }}>
-              Welcome to Indie Filmmaking Tracker
+            <h2 style={{ margin: '0 0 6px', textAlign: 'center', lineHeight: 1.3 }}>
+              <span style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#718096', marginBottom: 2 }}>Welcome to</span>
+              <span style={{ display: 'block', fontSize: 20, fontWeight: 700, color: '#1a202c' }}>Indie Filmmaking Tracker</span>
             </h2>
             <p style={{ margin: '0 0 28px', fontSize: 13, color: '#718096', textAlign: 'center' }}>
               How would you like to continue?

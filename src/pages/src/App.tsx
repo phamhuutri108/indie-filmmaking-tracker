@@ -68,15 +68,12 @@ export default function App() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          height: 52,
+          height: 72,
           boxShadow: '0 2px 8px rgba(0,74,173,0.3)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <img src="/ift-logo.png" alt="IFT" style={{ height: 36, objectFit: 'contain' }} />
-          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', borderLeft: '1px solid rgba(255,255,255,0.3)', paddingLeft: 12, letterSpacing: '0.12em', fontWeight: 600, textTransform: 'uppercase' }}>
-            Indie Filmmaking Tracker
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <img src="/ift-logo_landscape.png" alt="Indie Filmmaking Tracker" style={{ height: 56, width: 'auto', objectFit: 'contain', display: 'block' }} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{
