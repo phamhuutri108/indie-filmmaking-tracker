@@ -218,10 +218,110 @@ app.delete('/api/monitors/:id', async (c) => {
 });
 
 // ============================================================
+// MODULE 5: My Films
+// ============================================================
+app.get('/api/films', async (c) => {
+  const { status, genre } = c.req.query();
+  let query = `SELECT * FROM films WHERE 1=1`;
+  const params: unknown[] = [];
+  if (status) { query += ` AND status = ?`; params.push(status); }
+  if (genre)  { query += ` AND genre = ?`;  params.push(genre); }
+  query += ` ORDER BY year DESC, title ASC`;
+  const result = await c.env.DB.prepare(query).bind(...params).all();
+  return c.json({ data: result.results });
+});
+
+app.get('/api/films/:id', async (c) => {
+  const row = await c.env.DB.prepare(`SELECT * FROM films WHERE id = ?`)
+    .bind(c.req.param('id'))
+    .first();
+  return row ? c.json(row) : c.json({ error: 'Not found' }, 404);
+});
+
+app.post('/api/films', async (c) => {
+  const body = await c.req.json<Record<string, unknown>>();
+  const { title, title_vi, year, genre, duration_min, logline, logline_vi,
+          director, producer, status, poster_url, trailer_url, notes } = body as any;
+  const result = await c.env.DB.prepare(
+    `INSERT INTO films (title, title_vi, year, genre, duration_min, logline, logline_vi,
+      director, producer, status, poster_url, trailer_url, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(title, title_vi, year, genre, duration_min, logline, logline_vi,
+    director ?? 'Tri Pham', producer, status ?? 'in-production', poster_url, trailer_url, notes).run();
+  return c.json({ id: result.meta.last_row_id }, 201);
+});
+
+app.put('/api/films/:id', async (c) => {
+  const body = await c.req.json<Record<string, unknown>>();
+  const { title, title_vi, year, genre, duration_min, logline, logline_vi,
+          director, producer, status, poster_url, trailer_url, notes } = body as any;
+  await c.env.DB.prepare(
+    `UPDATE films SET title=?, title_vi=?, year=?, genre=?, duration_min=?, logline=?, logline_vi=?,
+      director=?, producer=?, status=?, poster_url=?, trailer_url=?, notes=?,
+      updated_at=CURRENT_TIMESTAMP WHERE id=?`
+  ).bind(title, title_vi, year, genre, duration_min, logline, logline_vi,
+    director, producer, status, poster_url, trailer_url, notes, c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+app.delete('/api/films/:id', async (c) => {
+  await c.env.DB.prepare(`DELETE FROM films WHERE id = ?`).bind(c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+// ============================================================
+// MODULE 5: Submissions
+// ============================================================
+app.get('/api/submissions', async (c) => {
+  const { film_id, status, ref_table } = c.req.query();
+  let query = `SELECT * FROM submissions WHERE 1=1`;
+  const params: unknown[] = [];
+  if (film_id)   { query += ` AND film_id = ?`;   params.push(Number(film_id)); }
+  if (status)    { query += ` AND status = ?`;     params.push(status); }
+  if (ref_table) { query += ` AND ref_table = ?`;  params.push(ref_table); }
+  query += ` ORDER BY created_at DESC`;
+  const result = await c.env.DB.prepare(query).bind(...params).all();
+  return c.json({ data: result.results });
+});
+
+app.post('/api/submissions', async (c) => {
+  const body = await c.req.json<Record<string, unknown>>();
+  const { film_id, film_title, ref_table, ref_id, ref_name, deadline,
+          submitted_at, submission_platform, submission_url, entry_fee_paid,
+          status, result_date, notes } = body as any;
+  const result = await c.env.DB.prepare(
+    `INSERT INTO submissions (film_id, film_title, ref_table, ref_id, ref_name, deadline,
+      submitted_at, submission_platform, submission_url, entry_fee_paid, status, result_date, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(film_id, film_title, ref_table, ref_id, ref_name, deadline,
+    submitted_at, submission_platform ?? 'direct', submission_url, entry_fee_paid,
+    status ?? 'draft', result_date, notes).run();
+  return c.json({ id: result.meta.last_row_id }, 201);
+});
+
+app.put('/api/submissions/:id', async (c) => {
+  const body = await c.req.json<Record<string, unknown>>();
+  const { status, submitted_at, result_date, notes, entry_fee_paid,
+          submission_platform, submission_url } = body as any;
+  await c.env.DB.prepare(
+    `UPDATE submissions SET status=?, submitted_at=?, result_date=?, notes=?,
+      entry_fee_paid=?, submission_platform=?, submission_url=?, updated_at=CURRENT_TIMESTAMP
+     WHERE id=?`
+  ).bind(status, submitted_at, result_date, notes, entry_fee_paid,
+    submission_platform, submission_url, c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+app.delete('/api/submissions/:id', async (c) => {
+  await c.env.DB.prepare(`DELETE FROM submissions WHERE id = ?`).bind(c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+// ============================================================
 // Stats summary for dashboard cards
 // ============================================================
 app.get('/api/stats', async (c) => {
-  const [festivals, funds, education, upcoming7, upcoming30] = await Promise.all([
+  const [festivals, funds, education, upcoming7, upcoming30, films, submissions] = await Promise.all([
     c.env.DB.prepare(`SELECT COUNT(*) as count FROM festivals WHERE status = 'active'`).first<{ count: number }>(),
     c.env.DB.prepare(`SELECT COUNT(*) as count FROM funds_grants WHERE status = 'active'`).first<{ count: number }>(),
     c.env.DB.prepare(`SELECT COUNT(*) as count FROM education_residency WHERE status = 'active'`).first<{ count: number }>(),
@@ -243,6 +343,8 @@ app.get('/api/stats', async (c) => {
         SELECT deadline as d FROM education_residency WHERE status='active' AND deadline BETWEEN date('now') AND date('now', '+30 days')
       )
     `).first<{ count: number }>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM films`).first<{ count: number }>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM submissions`).first<{ count: number }>(),
   ]);
   return c.json({
     festivals: festivals?.count ?? 0,
@@ -250,6 +352,8 @@ app.get('/api/stats', async (c) => {
     education: education?.count ?? 0,
     upcoming7: upcoming7?.count ?? 0,
     upcoming30: upcoming30?.count ?? 0,
+    films: films?.count ?? 0,
+    submissions: submissions?.count ?? 0,
   });
 });
 

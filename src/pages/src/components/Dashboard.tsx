@@ -11,6 +11,8 @@ const STAT_CARDS = [
   { key: 'education' as const, icon: '🎓', color: '#805ad5', bg: '#faf5ff' },
   { key: 'upcoming7' as const, icon: '⚡', color: '#e53e3e', bg: '#fff5f5' },
   { key: 'upcoming30' as const, icon: '📅', color: '#d69e2e', bg: '#fffff0' },
+  { key: 'films' as const, icon: '🎞️', color: '#2C7A7B', bg: '#E6FFFA' },
+  { key: 'submissions' as const, icon: '📋', color: '#744210', bg: '#FFFFF0' },
 ];
 
 const TYPE_COLORS: Record<string, string> = {

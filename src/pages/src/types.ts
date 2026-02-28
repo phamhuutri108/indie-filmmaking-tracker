@@ -88,4 +88,42 @@ export interface Stats {
   education: number;
   upcoming7: number;
   upcoming30: number;
+  films: number;
+  submissions: number;
+}
+
+export interface Film {
+  id: number;
+  title: string;
+  title_vi?: string;
+  year?: number;
+  genre?: string;
+  duration_min?: number;
+  logline?: string;
+  logline_vi?: string;
+  director?: string;
+  producer?: string;
+  status?: string; // in-production | completed | released
+  poster_url?: string;
+  trailer_url?: string;
+  notes?: string;
+  created_at?: string;
+}
+
+export interface Submission {
+  id: number;
+  film_id: number;
+  film_title?: string;
+  ref_table: string; // festivals | funds_grants | education_residency
+  ref_id: number;
+  ref_name?: string;
+  deadline?: string;
+  submitted_at?: string;
+  submission_platform?: string;
+  submission_url?: string;
+  entry_fee_paid?: number;
+  status: string; // draft | submitted | accepted | rejected | waitlisted | withdrawn
+  result_date?: string;
+  notes?: string;
+  created_at?: string;
 }
