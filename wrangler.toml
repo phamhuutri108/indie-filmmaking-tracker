@@ -9,6 +9,7 @@ bucket = "./src/pages/dist"
 binding = "DB"
 database_name = "ift-db"
 database_id = "f2c944ae-d37a-43a5-b27c-897dc4d6cb3c"
+migrations_dir = "src/db/migrations"
 
 [triggers]
 crons = ["0 8 * * *"]
