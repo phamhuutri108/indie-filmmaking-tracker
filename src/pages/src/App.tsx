@@ -30,7 +30,8 @@ export default function App() {
   const [showUsers, setShowUsers] = useState(false);
   const [showSignIn, setShowSignIn] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    return window.location.pathname === '/sign-in' || params.get('auth_status') === 'pending';
+    const path = window.location.pathname;
+    return path === '/sign-in' || path === '/owner' || params.get('auth_status') === 'pending';
   });
   const t = useI18n(lang);
   const { role, login, logout } = useAuth();
