@@ -114,8 +114,8 @@ function FilmDetail({
   film: Film;
   t: ReturnType<typeof useI18n>;
   onClose: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const tf = t.films;
   const tc = t.common;
@@ -178,20 +178,26 @@ function FilmDetail({
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 24, justifyContent: 'flex-end' }}>
-        <button
-          onClick={onDelete}
-          style={{ background: '#FFF5F5', color: '#C53030', border: '1px solid #FED7D7', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 13 }}
-        >
-          Delete
-        </button>
-        <button
-          onClick={onEdit}
-          style={{ background: '#004aad', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
-        >
-          {tc.edit}
-        </button>
-      </div>
+      {(onEdit || onDelete) && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 24, justifyContent: 'flex-end' }}>
+          {onDelete && (
+            <button
+              onClick={onDelete}
+              style={{ background: '#FFF5F5', color: '#C53030', border: '1px solid #FED7D7', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 13 }}
+            >
+              Delete
+            </button>
+          )}
+          {onEdit && (
+            <button
+              onClick={onEdit}
+              style={{ background: '#004aad', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+            >
+              {tc.edit}
+            </button>
+          )}
+        </div>
+      )}
     </Modal>
   );
 }
@@ -317,7 +323,7 @@ function FilmForm({
 }
 
 // ─── Main Component ────────────────────────────────────────────────────────────
-export function MyFilms({ t }: { t: ReturnType<typeof useI18n> }) {
+export function MyFilms({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwner: boolean }) {
   const tf = t.films;
   const tc = t.common;
   const [films, setFilms] = useState<Film[]>([]);
@@ -361,12 +367,14 @@ export function MyFilms({ t }: { t: ReturnType<typeof useI18n> }) {
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#1a202c' }}>{tf.title}</h1>
           <p style={{ margin: '4px 0 0', color: '#718096', fontSize: 14 }}>{tf.subtitle}</p>
         </div>
-        <button
-          onClick={() => setEditing('new')}
-          style={{ background: '#004aad', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 18px', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}
-        >
-          + {tf.addFilm}
-        </button>
+        {isOwner && (
+          <button
+            onClick={() => setEditing('new')}
+            style={{ background: '#004aad', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 18px', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}
+          >
+            + {tf.addFilm}
+          </button>
+        )}
       </div>
 
       {/* Filters */}
@@ -409,8 +417,8 @@ export function MyFilms({ t }: { t: ReturnType<typeof useI18n> }) {
           film={selected}
           t={t}
           onClose={() => setSelected(null)}
-          onEdit={() => { setEditing(selected); setSelected(null); }}
-          onDelete={() => handleDelete(selected)}
+          onEdit={isOwner ? () => { setEditing(selected); setSelected(null); } : undefined}
+          onDelete={isOwner ? () => handleDelete(selected) : undefined}
         />
       )}
 

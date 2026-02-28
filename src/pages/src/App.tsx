@@ -8,6 +8,7 @@ import { MonitorList } from './components/MonitorList';
 import { MyFilms } from './components/MyFilms';
 import { Submissions } from './components/Submissions';
 import { Watchlist } from './components/Watchlist';
+import { AuthGate, useAuth } from './components/AuthGate';
 
 type Tab = 'dashboard' | 'festivals' | 'funds' | 'education' | 'monitors' | 'films' | 'submissions' | 'watchlist';
 
@@ -15,6 +16,10 @@ export default function App() {
   const [lang, setLang] = useState<Lang>('en');
   const [tab, setTab] = useState<Tab>('dashboard');
   const t = useI18n(lang);
+  const { role, login, logout } = useAuth();
+  const isOwner = role === 'owner';
+
+  if (!role) return <AuthGate onAuth={login} />;
 
   const tabs: { key: Tab; label: string; icon: string }[] = [
     { key: 'dashboard', label: t.nav.dashboard, icon: '📊' },
@@ -48,21 +53,38 @@ export default function App() {
             Indie Filmmaking Tracker
           </span>
         </div>
-        <button
-          onClick={() => setLang(lang === 'en' ? 'vi' : 'en')}
-          style={{
-            background: 'rgba(255,255,255,0.15)',
-            color: '#fff',
-            border: '1px solid rgba(255,255,255,0.3)',
-            borderRadius: 6,
-            padding: '4px 12px',
-            cursor: 'pointer',
-            fontSize: 13,
-            fontWeight: 600,
-          }}
-        >
-          {lang === 'en' ? '🇻🇳 VI' : '🇬🇧 EN'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{
+            fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
+            padding: '3px 10px', borderRadius: 20,
+            background: isOwner ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)',
+            color: isOwner ? '#fff' : 'rgba(255,255,255,0.6)',
+            border: '1px solid rgba(255,255,255,0.25)',
+          }}>
+            {isOwner ? '🔑 Owner' : '👁 Guest'}
+          </span>
+          <button
+            onClick={() => setLang(lang === 'en' ? 'vi' : 'en')}
+            style={{
+              background: 'rgba(255,255,255,0.15)', color: '#fff',
+              border: '1px solid rgba(255,255,255,0.3)', borderRadius: 6,
+              padding: '4px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            }}
+          >
+            {lang === 'en' ? '🇻🇳 VI' : '🇬🇧 EN'}
+          </button>
+          <button
+            onClick={logout}
+            title="Switch role"
+            style={{
+              background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)',
+              border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6,
+              padding: '4px 10px', cursor: 'pointer', fontSize: 12,
+            }}
+          >
+            ⇄
+          </button>
+        </div>
       </header>
 
       {/* Nav */}
@@ -105,13 +127,13 @@ export default function App() {
       {/* Content */}
       <main style={{ maxWidth: 960, margin: '0 auto', padding: '28px 16px' }}>
         {tab === 'dashboard' && <Dashboard t={t} />}
-        {tab === 'festivals' && <FestivalList t={t} />}
-        {tab === 'funds' && <FundList t={t} />}
-        {tab === 'education' && <EducationList t={t} />}
-        {tab === 'monitors' && <MonitorList t={t} />}
-        {tab === 'films' && <MyFilms t={t} />}
-        {tab === 'submissions' && <Submissions t={t} />}
-        {tab === 'watchlist' && <Watchlist t={t} />}
+        {tab === 'festivals' && <FestivalList t={t} isOwner={isOwner} />}
+        {tab === 'funds' && <FundList t={t} isOwner={isOwner} />}
+        {tab === 'education' && <EducationList t={t} isOwner={isOwner} />}
+        {tab === 'monitors' && <MonitorList t={t} isOwner={isOwner} />}
+        {tab === 'films' && <MyFilms t={t} isOwner={isOwner} />}
+        {tab === 'submissions' && <Submissions t={t} isOwner={isOwner} />}
+        {tab === 'watchlist' && <Watchlist t={t} isOwner={isOwner} />}
       </main>
     </div>
   );

@@ -17,7 +17,7 @@ const REF_COLORS: Record<string, string> = {
   education_residency: '#805ad5',
 };
 
-export function Watchlist({ t }: { t: ReturnType<typeof useI18n> }) {
+export function Watchlist({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwner: boolean }) {
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
@@ -92,7 +92,7 @@ export function Watchlist({ t }: { t: ReturnType<typeof useI18n> }) {
       ) : (
         <div style={{ display: 'grid', gap: 10 }}>
           {filtered.map((item) => (
-            <WatchlistCard key={item.id} item={item} t={t} onRemove={remove} />
+            <WatchlistCard key={item.id} item={item} t={t} onRemove={isOwner ? remove : undefined} />
           ))}
         </div>
       )}
@@ -107,7 +107,7 @@ function WatchlistCard({
 }: {
   item: WatchlistItem;
   t: ReturnType<typeof useI18n>;
-  onRemove: (item: WatchlistItem) => void;
+  onRemove?: (item: WatchlistItem) => void;
 }) {
   const color = REF_COLORS[item.ref_table] ?? '#718096';
   const label = REF_LABELS[item.ref_table] ?? item.ref_table;
@@ -158,12 +158,14 @@ function WatchlistCard({
             🌐
           </a>
         )}
-        <button
-          onClick={() => onRemove(item)}
-          style={removeBtn}
-        >
-          {t.watchlist.remove}
-        </button>
+        {onRemove && (
+          <button
+            onClick={() => onRemove(item)}
+            style={removeBtn}
+          >
+            {t.watchlist.remove}
+          </button>
+        )}
       </div>
     </div>
   );

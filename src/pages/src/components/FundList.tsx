@@ -217,7 +217,7 @@ function AddFundModal({
 }
 
 // ─── Main FundList ────────────────────────────────────────────────────────────
-export function FundList({ t }: { t: ReturnType<typeof useI18n> }) {
+export function FundList({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwner: boolean }) {
   const [items, setItems] = useState<Fund[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -299,9 +299,11 @@ export function FundList({ t }: { t: ReturnType<typeof useI18n> }) {
           <button onClick={refresh} disabled={refreshing} style={btnSecondary}>
             🔄 {refreshing ? t.funds.refreshing : t.funds.refresh}
           </button>
-          <button onClick={() => setShowAdd(true)} style={btnPrimary}>
-            + {t.funds.addFund}
-          </button>
+          {isOwner && (
+            <button onClick={() => setShowAdd(true)} style={btnPrimary}>
+              + {t.funds.addFund}
+            </button>
+          )}
         </div>
       </div>
 
@@ -366,13 +368,15 @@ export function FundList({ t }: { t: ReturnType<typeof useI18n> }) {
                   )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-                  <button
-                    onClick={(e) => toggleStar(e, f.id)}
-                    title={watchlistIds.has(f.id) ? 'Remove from watchlist' : 'Add to watchlist'}
-                    style={starBtnStyle(watchlistIds.has(f.id))}
-                  >
-                    {watchlistIds.has(f.id) ? '⭐' : '☆'}
-                  </button>
+                  {isOwner && (
+                    <button
+                      onClick={(e) => toggleStar(e, f.id)}
+                      title={watchlistIds.has(f.id) ? 'Remove from watchlist' : 'Add to watchlist'}
+                      style={starBtnStyle(watchlistIds.has(f.id))}
+                    >
+                      {watchlistIds.has(f.id) ? '⭐' : '☆'}
+                    </button>
+                  )}
                   {f.deadline && <DeadlineBadge deadline={f.deadline} t={t} />}
                 </div>
               </div>

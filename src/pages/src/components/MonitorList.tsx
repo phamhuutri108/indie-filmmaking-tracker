@@ -26,7 +26,7 @@ interface RecordOption {
   website?: string;
 }
 
-export function MonitorList({ t }: { t: ReturnType<typeof useI18n> }) {
+export function MonitorList({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwner: boolean }) {
   const [items, setItems] = useState<Monitor[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
@@ -129,7 +129,7 @@ export function MonitorList({ t }: { t: ReturnType<typeof useI18n> }) {
       </div>
 
       {/* Add form card */}
-      <div
+      {isOwner && <div
         style={{
           border: '1px solid #e2e8f0',
           borderRadius: 10,
@@ -222,7 +222,7 @@ export function MonitorList({ t }: { t: ReturnType<typeof useI18n> }) {
         >
           {t.monitors.addMonitor}
         </button>
-      </div>
+      </div>}
 
       {/* Active monitors */}
       {active.length === 0 && inactive.length === 0 ? (
@@ -244,7 +244,7 @@ export function MonitorList({ t }: { t: ReturnType<typeof useI18n> }) {
               <div style={sectionLabel}>● Active ({active.length})</div>
               <div style={{ display: 'grid', gap: 8 }}>
                 {active.map((m) => (
-                  <MonitorCard key={m.id} monitor={m} t={t} onDeactivate={deactivate} />
+                  <MonitorCard key={m.id} monitor={m} t={t} onDeactivate={deactivate} isOwner={isOwner} />
                 ))}
               </div>
             </div>
@@ -254,7 +254,7 @@ export function MonitorList({ t }: { t: ReturnType<typeof useI18n> }) {
               <div style={{ ...sectionLabel, color: '#a0aec0' }}>○ Inactive ({inactive.length})</div>
               <div style={{ display: 'grid', gap: 8, opacity: 0.6 }}>
                 {inactive.map((m) => (
-                  <MonitorCard key={m.id} monitor={m} t={t} onDeactivate={deactivate} />
+                  <MonitorCard key={m.id} monitor={m} t={t} onDeactivate={deactivate} isOwner={isOwner} />
                 ))}
               </div>
             </div>
@@ -269,10 +269,12 @@ function MonitorCard({
   monitor: m,
   t,
   onDeactivate,
+  isOwner,
 }: {
   monitor: Monitor;
   t: ReturnType<typeof useI18n>;
   onDeactivate: (id: number) => void;
+  isOwner: boolean;
 }) {
   const watchLabel = WATCH_OPTIONS.find((o) => o.value === m.watch_for)?.label ?? m.watch_for;
   const refLabel = REF_TABLES.find((r) => r.value === m.ref_table)?.label;
@@ -330,7 +332,7 @@ function MonitorCard({
         {m.is_active ? (
           <span style={{ fontSize: 12, color: '#38a169', fontWeight: 700 }}>● {t.monitors.active}</span>
         ) : null}
-        {m.is_active && (
+        {m.is_active && isOwner && (
           <button
             onClick={() => onDeactivate(m.id)}
             style={{

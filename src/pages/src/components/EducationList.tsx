@@ -233,7 +233,7 @@ function AddEducationModal({
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
-export function EducationList({ t }: { t: ReturnType<typeof useI18n> }) {
+export function EducationList({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwner: boolean }) {
   const [items, setItems] = useState<Education[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -302,9 +302,11 @@ export function EducationList({ t }: { t: ReturnType<typeof useI18n> }) {
           <h2 style={{ margin: '0 0 4px', fontSize: 22, color: '#1a202c' }}>{t.education.title}</h2>
           <p style={{ margin: 0, color: '#718096', fontSize: 14 }}>{t.education.subtitle}</p>
         </div>
-        <button onClick={() => setShowAdd(true)} style={btnPrimary}>
-          + {t.education.addEducation}
-        </button>
+        {isOwner && (
+          <button onClick={() => setShowAdd(true)} style={btnPrimary}>
+            + {t.education.addEducation}
+          </button>
+        )}
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -359,13 +361,15 @@ export function EducationList({ t }: { t: ReturnType<typeof useI18n> }) {
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-                  <button
-                    onClick={(ev) => toggleStar(ev, e.id)}
-                    title={watchlistIds.has(e.id) ? 'Remove from watchlist' : 'Add to watchlist'}
-                    style={starBtnStyle(watchlistIds.has(e.id))}
-                  >
-                    {watchlistIds.has(e.id) ? '⭐' : '☆'}
-                  </button>
+                  {isOwner && (
+                    <button
+                      onClick={(ev) => toggleStar(ev, e.id)}
+                      title={watchlistIds.has(e.id) ? 'Remove from watchlist' : 'Add to watchlist'}
+                      style={starBtnStyle(watchlistIds.has(e.id))}
+                    >
+                      {watchlistIds.has(e.id) ? '⭐' : '☆'}
+                    </button>
+                  )}
                   {e.deadline && <DeadlineBadge deadline={e.deadline} t={t} />}
                 </div>
               </div>

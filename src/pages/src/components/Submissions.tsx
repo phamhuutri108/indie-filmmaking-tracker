@@ -42,8 +42,8 @@ function SubmissionRow({
 }: {
   sub: Submission;
   t: ReturnType<typeof useI18n>;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const ts = t.submissions;
   const { bg, color } = getStatusStyle(sub.status);
@@ -99,20 +99,26 @@ function SubmissionRow({
         <span style={{ fontSize: 12, fontWeight: 700, background: bg, color, borderRadius: 6, padding: '3px 10px', whiteSpace: 'nowrap' }}>
           {statusLabel}
         </span>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button
-            onClick={onEdit}
-            style={{ background: '#e8f0fb', color: '#004aad', border: '1px solid #BEE3F8', borderRadius: 5, padding: '3px 10px', cursor: 'pointer', fontSize: 12 }}
-          >
-            {t.common.edit}
-          </button>
-          <button
-            onClick={onDelete}
-            style={{ background: '#FFF5F5', color: '#C53030', border: '1px solid #FED7D7', borderRadius: 5, padding: '3px 10px', cursor: 'pointer', fontSize: 12 }}
-          >
-            ✕
-          </button>
-        </div>
+        {(onEdit || onDelete) && (
+          <div style={{ display: 'flex', gap: 6 }}>
+            {onEdit && (
+              <button
+                onClick={onEdit}
+                style={{ background: '#e8f0fb', color: '#004aad', border: '1px solid #BEE3F8', borderRadius: 5, padding: '3px 10px', cursor: 'pointer', fontSize: 12 }}
+              >
+                {t.common.edit}
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={onDelete}
+                style={{ background: '#FFF5F5', color: '#C53030', border: '1px solid #FED7D7', borderRadius: 5, padding: '3px 10px', cursor: 'pointer', fontSize: 12 }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -310,7 +316,7 @@ function SubmissionForm({
 }
 
 // ─── Main Component ────────────────────────────────────────────────────────────
-export function Submissions({ t }: { t: ReturnType<typeof useI18n> }) {
+export function Submissions({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwner: boolean }) {
   const ts = t.submissions;
   const tc = t.common;
 
@@ -371,7 +377,8 @@ export function Submissions({ t }: { t: ReturnType<typeof useI18n> }) {
         </div>
         <button
           onClick={() => setEditing('new')}
-          style={{ background: '#004aad', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 18px', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}
+          style={{ background: '#004aad', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 18px', cursor: 'pointer', fontSize: 14, fontWeight: 600,
+            display: isOwner ? 'inline-block' : 'none' }}
         >
           + {ts.addSubmission}
         </button>
@@ -441,8 +448,8 @@ export function Submissions({ t }: { t: ReturnType<typeof useI18n> }) {
               key={sub.id}
               sub={sub}
               t={t}
-              onEdit={() => setEditing(sub)}
-              onDelete={() => handleDelete(sub)}
+              onEdit={isOwner ? () => setEditing(sub) : undefined}
+              onDelete={isOwner ? () => handleDelete(sub) : undefined}
             />
           ))}
         </div>

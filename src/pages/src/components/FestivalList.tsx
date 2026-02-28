@@ -287,7 +287,7 @@ function AddFestivalModal({
 }
 
 // ─── Main FestivalList ────────────────────────────────────────────────────────
-export function FestivalList({ t }: { t: ReturnType<typeof useI18n> }) {
+export function FestivalList({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwner: boolean }) {
   const [items, setItems] = useState<Festival[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -359,9 +359,11 @@ export function FestivalList({ t }: { t: ReturnType<typeof useI18n> }) {
           <h2 style={{ margin: '0 0 4px', fontSize: 22, color: '#1a202c' }}>{t.festivals.title}</h2>
           <p style={{ margin: 0, color: '#718096', fontSize: 14 }}>{t.festivals.subtitle}</p>
         </div>
-        <button onClick={() => setShowAdd(true)} style={btnPrimary}>
-          + {t.festivals.addFestival}
-        </button>
+        {isOwner && (
+          <button onClick={() => setShowAdd(true)} style={btnPrimary}>
+            + {t.festivals.addFestival}
+          </button>
+        )}
       </div>
 
       {/* Search + filter */}
@@ -424,13 +426,15 @@ export function FestivalList({ t }: { t: ReturnType<typeof useI18n> }) {
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
-                  <button
-                    onClick={(e) => toggleStar(e, f.id)}
-                    title={watchlistIds.has(f.id) ? 'Remove from watchlist' : 'Add to watchlist'}
-                    style={starBtn(watchlistIds.has(f.id))}
-                  >
-                    {watchlistIds.has(f.id) ? '⭐' : '☆'}
-                  </button>
+                  {isOwner && (
+                    <button
+                      onClick={(e) => toggleStar(e, f.id)}
+                      title={watchlistIds.has(f.id) ? 'Remove from watchlist' : 'Add to watchlist'}
+                      style={starBtn(watchlistIds.has(f.id))}
+                    >
+                      {watchlistIds.has(f.id) ? '⭐' : '☆'}
+                    </button>
+                  )}
                   {f.early_deadline && (
                     <div style={{ fontSize: 12, color: '#718096' }}>
                       {t.festivals.earlyDeadline}: <DeadlineBadge deadline={f.early_deadline} t={t} />
