@@ -3164,6 +3164,50 @@ app.get("/api/funds/:id", async (c) => {
   const row = await c.env.DB.prepare(`SELECT * FROM funds_grants WHERE id = ?`).bind(c.req.param("id")).first();
   return row ? c.json(row) : c.json({ error: "Not found" }, 404);
 });
+app.post("/api/funds", async (c) => {
+  const body = await c.req.json();
+  const {
+    name,
+    name_vi,
+    organization,
+    country,
+    website,
+    type,
+    focus,
+    region_focus,
+    max_amount,
+    currency,
+    open_date,
+    deadline,
+    eligibility,
+    eligibility_vi,
+    description,
+    description_vi
+  } = body;
+  const result = await c.env.DB.prepare(
+    `INSERT INTO funds_grants (name, name_vi, organization, country, website, type, focus, region_focus,
+      max_amount, currency, open_date, deadline, eligibility, eligibility_vi, description, description_vi)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    name,
+    name_vi,
+    organization,
+    country,
+    website,
+    type,
+    focus,
+    region_focus,
+    max_amount,
+    currency ?? "USD",
+    open_date,
+    deadline,
+    eligibility,
+    eligibility_vi,
+    description,
+    description_vi
+  ).run();
+  return c.json({ id: result.meta.last_row_id }, 201);
+});
 app.get("/api/education", async (c) => {
   const { type, status = "active" } = c.req.query();
   let query = `SELECT * FROM education_residency WHERE status = ?`;
@@ -3179,6 +3223,55 @@ app.get("/api/education", async (c) => {
 app.get("/api/education/:id", async (c) => {
   const row = await c.env.DB.prepare(`SELECT * FROM education_residency WHERE id = ?`).bind(c.req.param("id")).first();
   return row ? c.json(row) : c.json({ error: "Not found" }, 404);
+});
+app.post("/api/education", async (c) => {
+  const body = await c.req.json();
+  const {
+    name,
+    name_vi,
+    organization,
+    country,
+    city,
+    website,
+    type,
+    duration,
+    application_open,
+    deadline,
+    program_dates,
+    stipend,
+    covers_travel,
+    covers_accommodation,
+    eligibility,
+    eligibility_vi,
+    description,
+    description_vi
+  } = body;
+  const result = await c.env.DB.prepare(
+    `INSERT INTO education_residency (name, name_vi, organization, country, city, website, type,
+      duration, application_open, deadline, program_dates, stipend, covers_travel,
+      covers_accommodation, eligibility, eligibility_vi, description, description_vi)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    name,
+    name_vi,
+    organization,
+    country,
+    city,
+    website,
+    type,
+    duration,
+    application_open,
+    deadline,
+    program_dates,
+    stipend ?? null,
+    covers_travel ? 1 : 0,
+    covers_accommodation ? 1 : 0,
+    eligibility,
+    eligibility_vi,
+    description,
+    description_vi
+  ).run();
+  return c.json({ id: result.meta.last_row_id }, 201);
 });
 app.get("/api/monitors", async (c) => {
   const result = await c.env.DB.prepare(
@@ -3198,6 +3291,232 @@ app.post("/api/monitors", async (c) => {
 app.delete("/api/monitors/:id", async (c) => {
   await c.env.DB.prepare(`UPDATE monitor_commands SET is_active = 0 WHERE id = ?`).bind(c.req.param("id")).run();
   return c.json({ ok: true });
+});
+app.get("/api/films", async (c) => {
+  const { status, genre } = c.req.query();
+  let query = `SELECT * FROM films WHERE 1=1`;
+  const params = [];
+  if (status) {
+    query += ` AND status = ?`;
+    params.push(status);
+  }
+  if (genre) {
+    query += ` AND genre = ?`;
+    params.push(genre);
+  }
+  query += ` ORDER BY year DESC, title ASC`;
+  const result = await c.env.DB.prepare(query).bind(...params).all();
+  return c.json({ data: result.results });
+});
+app.get("/api/films/:id", async (c) => {
+  const row = await c.env.DB.prepare(`SELECT * FROM films WHERE id = ?`).bind(c.req.param("id")).first();
+  return row ? c.json(row) : c.json({ error: "Not found" }, 404);
+});
+app.post("/api/films", async (c) => {
+  const body = await c.req.json();
+  const {
+    title,
+    title_vi,
+    year,
+    genre,
+    duration_min,
+    logline,
+    logline_vi,
+    director,
+    producer,
+    status,
+    poster_url,
+    trailer_url,
+    notes
+  } = body;
+  const result = await c.env.DB.prepare(
+    `INSERT INTO films (title, title_vi, year, genre, duration_min, logline, logline_vi,
+      director, producer, status, poster_url, trailer_url, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    title,
+    title_vi,
+    year,
+    genre,
+    duration_min,
+    logline,
+    logline_vi,
+    director ?? "Tri Pham",
+    producer,
+    status ?? "in-production",
+    poster_url,
+    trailer_url,
+    notes
+  ).run();
+  return c.json({ id: result.meta.last_row_id }, 201);
+});
+app.put("/api/films/:id", async (c) => {
+  const body = await c.req.json();
+  const {
+    title,
+    title_vi,
+    year,
+    genre,
+    duration_min,
+    logline,
+    logline_vi,
+    director,
+    producer,
+    status,
+    poster_url,
+    trailer_url,
+    notes
+  } = body;
+  await c.env.DB.prepare(
+    `UPDATE films SET title=?, title_vi=?, year=?, genre=?, duration_min=?, logline=?, logline_vi=?,
+      director=?, producer=?, status=?, poster_url=?, trailer_url=?, notes=?,
+      updated_at=CURRENT_TIMESTAMP WHERE id=?`
+  ).bind(
+    title,
+    title_vi,
+    year,
+    genre,
+    duration_min,
+    logline,
+    logline_vi,
+    director,
+    producer,
+    status,
+    poster_url,
+    trailer_url,
+    notes,
+    c.req.param("id")
+  ).run();
+  return c.json({ ok: true });
+});
+app.delete("/api/films/:id", async (c) => {
+  await c.env.DB.prepare(`DELETE FROM films WHERE id = ?`).bind(c.req.param("id")).run();
+  return c.json({ ok: true });
+});
+app.get("/api/submissions", async (c) => {
+  const { film_id, status, ref_table } = c.req.query();
+  let query = `SELECT * FROM submissions WHERE 1=1`;
+  const params = [];
+  if (film_id) {
+    query += ` AND film_id = ?`;
+    params.push(Number(film_id));
+  }
+  if (status) {
+    query += ` AND status = ?`;
+    params.push(status);
+  }
+  if (ref_table) {
+    query += ` AND ref_table = ?`;
+    params.push(ref_table);
+  }
+  query += ` ORDER BY created_at DESC`;
+  const result = await c.env.DB.prepare(query).bind(...params).all();
+  return c.json({ data: result.results });
+});
+app.post("/api/submissions", async (c) => {
+  const body = await c.req.json();
+  const {
+    film_id,
+    film_title,
+    ref_table,
+    ref_id,
+    ref_name,
+    deadline,
+    submitted_at,
+    submission_platform,
+    submission_url,
+    entry_fee_paid,
+    status,
+    result_date,
+    notes
+  } = body;
+  const result = await c.env.DB.prepare(
+    `INSERT INTO submissions (film_id, film_title, ref_table, ref_id, ref_name, deadline,
+      submitted_at, submission_platform, submission_url, entry_fee_paid, status, result_date, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    film_id,
+    film_title,
+    ref_table,
+    ref_id,
+    ref_name,
+    deadline,
+    submitted_at,
+    submission_platform ?? "direct",
+    submission_url,
+    entry_fee_paid,
+    status ?? "draft",
+    result_date,
+    notes
+  ).run();
+  return c.json({ id: result.meta.last_row_id }, 201);
+});
+app.put("/api/submissions/:id", async (c) => {
+  const body = await c.req.json();
+  const {
+    status,
+    submitted_at,
+    result_date,
+    notes,
+    entry_fee_paid,
+    submission_platform,
+    submission_url
+  } = body;
+  await c.env.DB.prepare(
+    `UPDATE submissions SET status=?, submitted_at=?, result_date=?, notes=?,
+      entry_fee_paid=?, submission_platform=?, submission_url=?, updated_at=CURRENT_TIMESTAMP
+     WHERE id=?`
+  ).bind(
+    status,
+    submitted_at,
+    result_date,
+    notes,
+    entry_fee_paid,
+    submission_platform,
+    submission_url,
+    c.req.param("id")
+  ).run();
+  return c.json({ ok: true });
+});
+app.delete("/api/submissions/:id", async (c) => {
+  await c.env.DB.prepare(`DELETE FROM submissions WHERE id = ?`).bind(c.req.param("id")).run();
+  return c.json({ ok: true });
+});
+app.get("/api/stats", async (c) => {
+  const [festivals, funds, education, upcoming7, upcoming30, films, submissions] = await Promise.all([
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM festivals WHERE status = 'active'`).first(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM funds_grants WHERE status = 'active'`).first(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM education_residency WHERE status = 'active'`).first(),
+    c.env.DB.prepare(`
+      SELECT COUNT(*) as count FROM (
+        SELECT regular_deadline as d FROM festivals WHERE status='active' AND regular_deadline BETWEEN date('now') AND date('now', '+7 days')
+        UNION ALL
+        SELECT deadline as d FROM funds_grants WHERE status='active' AND deadline BETWEEN date('now') AND date('now', '+7 days')
+        UNION ALL
+        SELECT deadline as d FROM education_residency WHERE status='active' AND deadline BETWEEN date('now') AND date('now', '+7 days')
+      )
+    `).first(),
+    c.env.DB.prepare(`
+      SELECT COUNT(*) as count FROM (
+        SELECT regular_deadline as d FROM festivals WHERE status='active' AND regular_deadline BETWEEN date('now') AND date('now', '+30 days')
+        UNION ALL
+        SELECT deadline as d FROM funds_grants WHERE status='active' AND deadline BETWEEN date('now') AND date('now', '+30 days')
+        UNION ALL
+        SELECT deadline as d FROM education_residency WHERE status='active' AND deadline BETWEEN date('now') AND date('now', '+30 days')
+      )
+    `).first(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM films`).first(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM submissions`).first()
+  ]);
+  return c.json({
+    festivals: festivals?.count ?? 0,
+    funds: funds?.count ?? 0,
+    education: education?.count ?? 0,
+    upcoming7: upcoming7?.count ?? 0,
+    upcoming30: upcoming30?.count ?? 0,
+    films: films?.count ?? 0,
+    submissions: submissions?.count ?? 0
+  });
 });
 app.get("/api/dashboard", async (c) => {
   const result = await c.env.DB.prepare(
