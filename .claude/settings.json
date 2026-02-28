@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc --noEmit -p src/workers/tsconfig.json)"
+      "Bash(npx tsc --noEmit -p src/workers/tsconfig.json)",
+      "Bash(npx wrangler d1 execute ift-db --local --file=src/db/migrations/004_watchlist.sql)",
+      "Bash(npm run build:pages)"
     ]
   }
 }
