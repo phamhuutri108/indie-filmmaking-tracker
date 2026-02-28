@@ -3,10 +3,16 @@
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { getAssetFromKV, NotFoundError } from '@cloudflare/kv-asset-handler';
 import { handleCron } from './cron';
+
+// Injected by wrangler at build time when [site] is configured
+// @ts-ignore
+import ASSET_MANIFEST from '__STATIC_CONTENT_MANIFEST';
 
 export interface Env {
   DB: D1Database;
+  __STATIC_CONTENT: KVNamespace;
   RESEND_API_KEY: string;
   ALERT_EMAIL: string;
   APP_URL: string;
@@ -15,7 +21,8 @@ export interface Env {
 
 const app = new Hono<{ Bindings: Env }>();
 
-app.use('*', cors({ origin: '*' }));
+// CORS only for API routes
+app.use('/api/*', cors({ origin: '*' }));
 
 // ============================================================
 // Health
@@ -170,6 +177,43 @@ app.get('/api/dashboard', async (c) => {
   ).all();
 
   return c.json({ upcoming: result.results });
+});
+
+// ============================================================
+// Static asset serving (Workers Sites catch-all)
+// Serves the React SPA; falls back to index.html for client-side routing
+// ============================================================
+app.get('*', async (c) => {
+  const kvEvent = {
+    request: c.req.raw,
+    waitUntil: (p: Promise<unknown>) => c.executionCtx.waitUntil(p),
+  };
+  const options = {
+    ASSET_NAMESPACE: c.env.__STATIC_CONTENT,
+    ASSET_MANIFEST,
+  };
+
+  try {
+    return await getAssetFromKV(kvEvent, options);
+  } catch (e) {
+    if (e instanceof NotFoundError) {
+      // SPA fallback: serve index.html for any unmatched path
+      const indexRequest = new Request(
+        new URL('/index.html', c.req.url).toString(),
+        c.req.raw
+      );
+      try {
+        const resp = await getAssetFromKV(
+          { request: indexRequest, waitUntil: kvEvent.waitUntil },
+          options
+        );
+        return new Response(resp.body, { ...resp, status: 200 });
+      } catch {
+        return c.text('Not found', 404);
+      }
+    }
+    return c.text('Internal Server Error', 500);
+  }
 });
 
 // ============================================================
