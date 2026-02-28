@@ -14,15 +14,29 @@ import { decodeJWT } from './apiFetch';
 
 type Tab = 'dashboard' | 'festivals' | 'funds' | 'education' | 'monitors' | 'films' | 'submissions' | 'watchlist';
 
+const VALID_TABS: Tab[] = ['dashboard', 'festivals', 'funds', 'education', 'monitors', 'films', 'submissions', 'watchlist'];
+
+function tabFromPath(): Tab {
+  const seg = window.location.pathname.replace(/^\//, '').split('/')[0] as Tab;
+  return VALID_TABS.includes(seg) ? seg : 'dashboard';
+}
+
 export default function App() {
   const [lang, setLang] = useState<Lang>('en');
-  const [tab, setTab] = useState<Tab>('dashboard');
+  const [tab, setTab] = useState<Tab>(tabFromPath);
   const [showUsers, setShowUsers] = useState(false);
   const t = useI18n(lang);
   const { role, login, logout } = useAuth();
   const isOwner = role === 'owner';
   // Members and owners can edit their own per-user data
   const isLoggedIn = role === 'owner' || role === 'member';
+
+  // Sync URL → tab on browser back/forward
+  useEffect(() => {
+    const onPop = () => setTab(tabFromPath());
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   // Handle Google OAuth callback — URL contains ?token=<jwt>
   useEffect(() => {
@@ -59,6 +73,8 @@ export default function App() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8f9fa', fontFamily: "'Montserrat', system-ui, -apple-system, sans-serif" }}>
+      {/* Sticky header + nav wrapper */}
+      <div style={{ position: 'sticky', top: 0, zIndex: 100 }}>
       {/* Header */}
       <header
         style={{
@@ -86,6 +102,17 @@ export default function App() {
           }}>
             {roleBadge}
           </span>
+          <button
+            onClick={logout}
+            title="Sign out / Switch role"
+            style={{
+              background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)',
+              border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6,
+              padding: '4px 10px', cursor: 'pointer', fontSize: 12,
+            }}
+          >
+            ⇄
+          </button>
           {isOwner && (
             <button
               onClick={() => setShowUsers(true)}
@@ -109,17 +136,6 @@ export default function App() {
           >
             {lang === 'en' ? '🇻🇳 VI' : '🇬🇧 EN'}
           </button>
-          <button
-            onClick={logout}
-            title="Sign out / Switch role"
-            style={{
-              background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)',
-              border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6,
-              padding: '4px 10px', cursor: 'pointer', fontSize: 12,
-            }}
-          >
-            ⇄
-          </button>
         </div>
       </header>
 
@@ -137,7 +153,7 @@ export default function App() {
         {tabs.map(({ key, label, icon }) => (
           <button
             key={key}
-            onClick={() => setTab(key)}
+            onClick={() => { setTab(key); window.history.pushState({}, '', `/${key}`); }}
             style={{
               background: 'transparent',
               color: tab === key ? '#fff' : 'rgba(255,255,255,0.6)',
@@ -159,6 +175,7 @@ export default function App() {
           </button>
         ))}
       </nav>
+      </div>{/* end sticky wrapper */}
 
       {showUsers && <UserManager onClose={() => setShowUsers(false)} />}
 
