@@ -82,7 +82,7 @@ function SubmissionRow({
       <div>
         {sub.deadline && (
           <div style={{ marginBottom: 4 }}>
-            <DeadlineBadge deadline={sub.deadline} t={t.common} small />
+            <DeadlineBadge deadline={sub.deadline} t={t} />
           </div>
         )}
         {sub.entry_fee_paid ? (
