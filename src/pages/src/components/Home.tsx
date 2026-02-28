@@ -3,35 +3,35 @@ import type { Lang } from '../i18n';
 const FEATURES: Record<Lang, { title: string; desc: string }[]> = {
   vi: [
     {
-      title: 'Festival Tracker',
+      title: 'Theo dõi Liên hoan phim',
       desc: 'Theo dõi deadline Early Bird, Regular, Late của hàng trăm liên hoan phim quốc tế. Cảnh báo trước khi hết hạn.',
     },
     {
-      title: 'Fund & Grant Radar',
+      title: 'Radar Quỹ & Tài trợ',
       desc: 'Tổng hợp quỹ tài trợ điện ảnh quốc tế — Hubert Bals, IDFA Bertha, Sundance Doc Fund — cùng deadline và điều kiện apply.',
     },
     {
-      title: 'Education & Residency',
+      title: 'Học thuật & Khu lưu trú',
       desc: 'Lab, residency, workshop, học bổng dành cho nhà làm phim — Berlinale Talents, Cannes Cinéfondation và nhiều hơn nữa.',
     },
     {
-      title: 'Submission Tracker',
+      title: 'Theo dõi Nộp phim',
       desc: 'Quản lý cá nhân: phim nào submit ở đâu, kết quả, chi phí, ghi chú. Thay thế hoàn toàn spreadsheet.',
     },
     {
-      title: 'My Films',
-      desc: 'Lưu trữ danh mục phim cá nhân — tên, thể loại, năm sản xuất — làm nền tảng cho Submission Tracker.',
+      title: 'Phim của tôi',
+      desc: 'Lưu trữ danh mục phim cá nhân — tên, thể loại, năm sản xuất — làm nền tảng cho Theo dõi Nộp phim.',
     },
     {
-      title: 'Dashboard',
+      title: 'Tổng quan',
       desc: 'Tổng quan toàn bộ deadline sắp tới từ tất cả các module, hiển thị theo thứ tự ưu tiên.',
     },
     {
-      title: 'Monitor',
+      title: 'Theo dõi tự động',
       desc: 'Đặt lệnh theo dõi tự động cho bất kỳ liên hoan, quỹ hay chương trình nào — nhận email khi có thông tin mới.',
     },
     {
-      title: 'Watchlist',
+      title: 'Danh sách yêu thích',
       desc: 'Đánh dấu các cơ hội quan tâm từ mọi module để xem lại sau mà không cần tìm kiếm lại từ đầu.',
     },
   ],
@@ -97,7 +97,7 @@ export function Home({ lang }: { lang: Lang }) {
     <div style={{ padding: '48px 24px 80px', maxWidth: 820, margin: '0 auto' }}>
 
       {/* Bio section */}
-      <div style={{ display: 'flex', gap: 56, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 72, alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', gap: 56, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 72, alignItems: 'stretch' }}>
 
         <div style={{ flex: 1, minWidth: 260 }}>
           <p style={pStyle}>{bio.p1}</p>
@@ -109,7 +109,7 @@ export function Home({ lang }: { lang: Lang }) {
         <img
           src="/profile-image.jpeg"
           alt="Tri Pham"
-          style={{ width: 340, flexShrink: 0, borderRadius: 8 }}
+          style={{ width: 340, flexShrink: 0, borderRadius: 8, objectFit: 'cover', objectPosition: 'top' }}
         />
       </div>
 
