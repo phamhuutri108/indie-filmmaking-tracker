@@ -349,7 +349,7 @@ export function FestivalList({ t }: { t: ReturnType<typeof useI18n> }) {
       );
     }
     return list;
-  }, [items, catFilter, search]);
+  }, [items, catFilter, tierFilter, search]);
 
   return (
     <div>
