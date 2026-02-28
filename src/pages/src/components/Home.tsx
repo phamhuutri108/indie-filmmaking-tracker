@@ -99,18 +99,18 @@ export function Home({ lang }: { lang: Lang }) {
       {/* Bio section */}
       <div style={{ display: 'flex', gap: 56, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 72, alignItems: 'flex-start' }}>
 
-        <img
-          src="/profile-image.jpeg"
-          alt="Tri Pham"
-          style={{ width: 200, flexShrink: 0, borderRadius: 8 }}
-        />
-
-        <div style={{ maxWidth: 480, flex: 1, minWidth: 260 }}>
+        <div style={{ flex: 1, minWidth: 260 }}>
           <p style={pStyle}>{bio.p1}</p>
           <p style={pStyle}>{bio.p2}</p>
           <p style={pStyle}>{bio.p3}</p>
           <p style={{ ...pStyle, margin: 0 }}>{bio.p4}</p>
         </div>
+
+        <img
+          src="/profile-image.jpeg"
+          alt="Tri Pham"
+          style={{ width: 340, flexShrink: 0, borderRadius: 8 }}
+        />
       </div>
 
       {/* Divider */}
