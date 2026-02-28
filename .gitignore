@@ -7,3 +7,4 @@ node_modules/
 dist/
 .claude/
 .DS_Store
+src/pages/tsconfig.tsbuildinfo
