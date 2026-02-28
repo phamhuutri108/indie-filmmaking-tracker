@@ -230,6 +230,14 @@ export default function App() {
         {tab === 'submissions' && <Submissions t={t} isOwner={isLoggedIn} />}
         {tab === 'watchlist'   && <Watchlist t={t} isOwner={isLoggedIn} />}
       </main>
+
+      {/* Footer */}
+      <footer style={{ marginTop: 48, paddingBottom: 32, fontSize: 13, color: '#a0aec0', textAlign: 'center' }}>
+        © 2026{' '}
+        <a href="https://www.phamhuutri.com" target="_blank" rel="noreferrer" style={{ color: '#718096' }}>
+          Pham Huu Tri
+        </a>.
+      </footer>
     </div>
   );
 }

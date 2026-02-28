@@ -257,14 +257,6 @@ export function Home({ lang }: { lang: Lang }) {
         </div>
       )}
 
-      {/* Footer */}
-      <div style={{ marginTop: 72, fontSize: 13, color: '#a0aec0', textAlign: 'center' }}>
-        © 2026{' '}
-        <a href="https://www.phamhuutri.com" target="_blank" rel="noreferrer" style={{ color: '#718096' }}>
-          Pham Huu Tri
-        </a>.
-      </div>
-
     </div>
   );
 }
