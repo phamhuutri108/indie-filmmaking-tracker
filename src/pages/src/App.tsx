@@ -7,8 +7,9 @@ import { EducationList } from './components/EducationList';
 import { MonitorList } from './components/MonitorList';
 import { MyFilms } from './components/MyFilms';
 import { Submissions } from './components/Submissions';
+import { Watchlist } from './components/Watchlist';
 
-type Tab = 'dashboard' | 'festivals' | 'funds' | 'education' | 'monitors' | 'films' | 'submissions';
+type Tab = 'dashboard' | 'festivals' | 'funds' | 'education' | 'monitors' | 'films' | 'submissions' | 'watchlist';
 
 export default function App() {
   const [lang, setLang] = useState<Lang>('en');
@@ -23,6 +24,7 @@ export default function App() {
     { key: 'monitors', label: t.nav.monitors, icon: '🔔' },
     { key: 'films', label: t.nav.films, icon: '🎞️' },
     { key: 'submissions', label: t.nav.submissions, icon: '📋' },
+    { key: 'watchlist', label: t.watchlist.title, icon: '⭐' },
   ];
 
   return (
@@ -109,6 +111,7 @@ export default function App() {
         {tab === 'monitors' && <MonitorList t={t} />}
         {tab === 'films' && <MyFilms t={t} />}
         {tab === 'submissions' && <Submissions t={t} />}
+        {tab === 'watchlist' && <Watchlist t={t} />}
       </main>
     </div>
   );

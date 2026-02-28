@@ -39,6 +39,7 @@ export interface Fund {
   eligibility?: string;
   description?: string;
   status?: string;
+  last_checked?: string;
 }
 
 export interface Education {
@@ -66,11 +67,27 @@ export interface Monitor {
   target_url: string;
   target_name?: string;
   monitor_type: string;
+  ref_table?: string;
+  ref_id?: number;
+  ref_name?: string;
+  deadline?: string;
   watch_for?: string;
   alert_days_before: number;
   is_active: number;
   last_triggered?: string;
   created_at: string;
+}
+
+export interface WatchlistItem {
+  id: number;
+  ref_table: string; // 'festivals' | 'funds_grants' | 'education_residency'
+  ref_id: number;
+  ref_name?: string;
+  deadline?: string;
+  website?: string;
+  country?: string;
+  notes?: string;
+  starred_at: string;
 }
 
 export interface DashboardItem {

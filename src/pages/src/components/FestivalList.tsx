@@ -294,6 +294,7 @@ export function FestivalList({ t }: { t: ReturnType<typeof useI18n> }) {
   const [catFilter, setCatFilter] = useState('');
   const [selected, setSelected] = useState<Festival | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [watchlistIds, setWatchlistIds] = useState<Set<number>>(new Set());
 
   const load = () => {
     setLoading(true);
@@ -304,7 +305,34 @@ export function FestivalList({ t }: { t: ReturnType<typeof useI18n> }) {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, []);
+  const loadWatchlist = () => {
+    fetch(`${API_BASE}/watchlist`)
+      .then((r) => r.json() as Promise<{ data: Array<{ ref_table: string; ref_id: number }> }>)
+      .then((d) => {
+        const ids = new Set(
+          (d.data ?? []).filter((w) => w.ref_table === 'festivals').map((w) => w.ref_id)
+        );
+        setWatchlistIds(ids);
+      })
+      .catch(() => {});
+  };
+
+  const toggleStar = async (e: React.MouseEvent, festivalId: number) => {
+    e.stopPropagation();
+    if (watchlistIds.has(festivalId)) {
+      await fetch(`${API_BASE}/watchlist/ref/festivals/${festivalId}`, { method: 'DELETE' });
+      setWatchlistIds((prev) => { const s = new Set(prev); s.delete(festivalId); return s; });
+    } else {
+      await fetch(`${API_BASE}/watchlist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref_table: 'festivals', ref_id: festivalId }),
+      });
+      setWatchlistIds((prev) => new Set([...prev, festivalId]));
+    }
+  };
+
+  useEffect(() => { load(); loadWatchlist(); }, []);
 
   const filtered = useMemo(() => {
     let list = items;
@@ -388,6 +416,13 @@ export function FestivalList({ t }: { t: ReturnType<typeof useI18n> }) {
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+                  <button
+                    onClick={(e) => toggleStar(e, f.id)}
+                    title={watchlistIds.has(f.id) ? 'Remove from watchlist' : 'Add to watchlist'}
+                    style={starBtn(watchlistIds.has(f.id))}
+                  >
+                    {watchlistIds.has(f.id) ? '⭐' : '☆'}
+                  </button>
                   {f.early_deadline && (
                     <div style={{ fontSize: 12, color: '#718096' }}>
                       {t.festivals.earlyDeadline}: <DeadlineBadge deadline={f.early_deadline} t={t} />
@@ -500,6 +535,18 @@ const btnPrimary: React.CSSProperties = {
   fontSize: 14,
   fontWeight: 600,
 };
+
+function starBtn(active: boolean): React.CSSProperties {
+  return {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: 18,
+    padding: '2px 4px',
+    color: active ? '#d69e2e' : '#cbd5e0',
+    lineHeight: 1,
+  };
+}
 
 const btnSecondary: React.CSSProperties = {
   padding: '8px 16px',

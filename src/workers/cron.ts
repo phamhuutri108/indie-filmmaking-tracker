@@ -2,6 +2,7 @@
 // Runs via Cloudflare Cron Trigger
 
 import { scrapeAsianFilmFestivals } from './scraper';
+import { scrapeFunds } from './fund-scraper';
 
 export interface Env {
   DB: D1Database;
@@ -15,11 +16,24 @@ export async function handleCron(env: Env): Promise<void> {
 
   await Promise.allSettled([
     runScraper(env),
+    runFundScraper(env),
     checkMonitorCommands(env),
     sendDailyDigest(env),
   ]);
 
   console.log('[IFT Cron] Done.');
+}
+
+async function runFundScraper(env: Env): Promise<void> {
+  try {
+    const result = await scrapeFunds(env.DB);
+    console.log(`[Cron] FundScraper — saved/updated: ${result.saved}, unchanged: ${result.skipped}`);
+    if (result.errors.length) {
+      console.error('[Cron] FundScraper errors:', result.errors);
+    }
+  } catch (err) {
+    console.error('[Cron] FundScraper failed:', err);
+  }
 }
 
 async function runScraper(env: Env): Promise<void> {

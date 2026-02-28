@@ -240,6 +240,7 @@ export function EducationList({ t }: { t: ReturnType<typeof useI18n> }) {
   const [typeFilter, setTypeFilter] = useState('');
   const [selected, setSelected] = useState<Education | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [watchlistIds, setWatchlistIds] = useState<Set<number>>(new Set());
 
   const load = () => {
     setLoading(true);
@@ -250,7 +251,34 @@ export function EducationList({ t }: { t: ReturnType<typeof useI18n> }) {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, []);
+  const loadWatchlist = () => {
+    fetch(`${API_BASE}/watchlist`)
+      .then((r) => r.json() as Promise<{ data: Array<{ ref_table: string; ref_id: number }> }>)
+      .then((d) => {
+        const ids = new Set(
+          (d.data ?? []).filter((w) => w.ref_table === 'education_residency').map((w) => w.ref_id)
+        );
+        setWatchlistIds(ids);
+      })
+      .catch(() => {});
+  };
+
+  const toggleStar = async (ev: React.MouseEvent, eduId: number) => {
+    ev.stopPropagation();
+    if (watchlistIds.has(eduId)) {
+      await fetch(`${API_BASE}/watchlist/ref/education_residency/${eduId}`, { method: 'DELETE' });
+      setWatchlistIds((prev) => { const s = new Set(prev); s.delete(eduId); return s; });
+    } else {
+      await fetch(`${API_BASE}/watchlist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref_table: 'education_residency', ref_id: eduId }),
+      });
+      setWatchlistIds((prev) => new Set([...prev, eduId]));
+    }
+  };
+
+  useEffect(() => { load(); loadWatchlist(); }, []);
 
   const filtered = useMemo(() => {
     let list = items;
@@ -330,7 +358,16 @@ export function EducationList({ t }: { t: ReturnType<typeof useI18n> }) {
                     {e.covers_accommodation ? <span style={badgeStyle('#38a169')}>🏨 Housing</span> : null}
                   </div>
                 </div>
-                {e.deadline && <DeadlineBadge deadline={e.deadline} t={t} />}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+                  <button
+                    onClick={(ev) => toggleStar(ev, e.id)}
+                    title={watchlistIds.has(e.id) ? 'Remove from watchlist' : 'Add to watchlist'}
+                    style={starBtnStyle(watchlistIds.has(e.id))}
+                  >
+                    {watchlistIds.has(e.id) ? '⭐' : '☆'}
+                  </button>
+                  {e.deadline && <DeadlineBadge deadline={e.deadline} t={t} />}
+                </div>
               </div>
             </div>
           ))}
@@ -407,6 +444,18 @@ function linkBtn(color: string): React.CSSProperties {
     fontSize: 13,
     fontWeight: 600,
     textDecoration: 'none',
+  };
+}
+
+function starBtnStyle(active: boolean): React.CSSProperties {
+  return {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: 18,
+    padding: '2px 4px',
+    color: active ? '#d69e2e' : '#cbd5e0',
+    lineHeight: 1,
   };
 }
 

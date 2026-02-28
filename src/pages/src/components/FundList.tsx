@@ -220,10 +220,12 @@ function AddFundModal({
 export function FundList({ t }: { t: ReturnType<typeof useI18n> }) {
   const [items, setItems] = useState<Fund[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [selected, setSelected] = useState<Fund | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [watchlistIds, setWatchlistIds] = useState<Set<number>>(new Set());
 
   const load = () => {
     setLoading(true);
@@ -234,7 +236,42 @@ export function FundList({ t }: { t: ReturnType<typeof useI18n> }) {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, []);
+  const loadWatchlist = () => {
+    fetch(`${API_BASE}/watchlist`)
+      .then((r) => r.json() as Promise<{ data: Array<{ ref_table: string; ref_id: number }> }>)
+      .then((d) => {
+        const ids = new Set(
+          (d.data ?? []).filter((w) => w.ref_table === 'funds_grants').map((w) => w.ref_id)
+        );
+        setWatchlistIds(ids);
+      })
+      .catch(() => {});
+  };
+
+  const toggleStar = async (e: React.MouseEvent, fundId: number) => {
+    e.stopPropagation();
+    if (watchlistIds.has(fundId)) {
+      await fetch(`${API_BASE}/watchlist/ref/funds_grants/${fundId}`, { method: 'DELETE' });
+      setWatchlistIds((prev) => { const s = new Set(prev); s.delete(fundId); return s; });
+    } else {
+      await fetch(`${API_BASE}/watchlist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref_table: 'funds_grants', ref_id: fundId }),
+      });
+      setWatchlistIds((prev) => new Set([...prev, fundId]));
+    }
+  };
+
+  const refresh = () => {
+    setRefreshing(true);
+    fetch(`${API_BASE}/funds/scrape`)
+      .then(() => load())
+      .catch(() => {})
+      .finally(() => setRefreshing(false));
+  };
+
+  useEffect(() => { load(); loadWatchlist(); }, []);
 
   const filtered = useMemo(() => {
     let list = items;
@@ -258,9 +295,14 @@ export function FundList({ t }: { t: ReturnType<typeof useI18n> }) {
           <h2 style={{ margin: '0 0 4px', fontSize: 22, color: '#1a202c' }}>{t.funds.title}</h2>
           <p style={{ margin: 0, color: '#718096', fontSize: 14 }}>{t.funds.subtitle}</p>
         </div>
-        <button onClick={() => setShowAdd(true)} style={btnPrimary}>
-          + {t.funds.addFund}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={refresh} disabled={refreshing} style={btnSecondary}>
+            🔄 {refreshing ? t.funds.refreshing : t.funds.refresh}
+          </button>
+          <button onClick={() => setShowAdd(true)} style={btnPrimary}>
+            + {t.funds.addFund}
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -317,8 +359,22 @@ export function FundList({ t }: { t: ReturnType<typeof useI18n> }) {
                       </span>
                     )}
                   </div>
+                  {f.last_checked && (
+                    <div style={{ fontSize: 11, color: '#a0aec0', marginTop: 4 }}>
+                      {t.funds.lastChecked}: {new Date(f.last_checked).toLocaleDateString()}
+                    </div>
+                  )}
                 </div>
-                {f.deadline && <DeadlineBadge deadline={f.deadline} t={t} />}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+                  <button
+                    onClick={(e) => toggleStar(e, f.id)}
+                    title={watchlistIds.has(f.id) ? 'Remove from watchlist' : 'Add to watchlist'}
+                    style={starBtnStyle(watchlistIds.has(f.id))}
+                  >
+                    {watchlistIds.has(f.id) ? '⭐' : '☆'}
+                  </button>
+                  {f.deadline && <DeadlineBadge deadline={f.deadline} t={t} />}
+                </div>
               </div>
             </div>
           ))}
@@ -395,6 +451,18 @@ function linkBtn(color: string): React.CSSProperties {
     fontSize: 13,
     fontWeight: 600,
     textDecoration: 'none',
+  };
+}
+
+function starBtnStyle(active: boolean): React.CSSProperties {
+  return {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: 18,
+    padding: '2px 4px',
+    color: active ? '#d69e2e' : '#cbd5e0',
+    lineHeight: 1,
   };
 }
 

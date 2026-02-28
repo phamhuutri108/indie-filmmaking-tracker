@@ -76,6 +76,9 @@ export const vi = {
     search: 'Tìm quỹ tài trợ...',
     addFund: 'Thêm quỹ',
     noResults: 'Không tìm thấy quỹ tài trợ.',
+    lastChecked: 'Đã kiểm tra lúc',
+    refresh: 'Cập nhật từ web',
+    refreshing: 'Đang kiểm tra...',
     form: {
       title: 'Thêm Quỹ / Tài trợ',
       name: 'Tên quỹ *',
@@ -137,6 +140,11 @@ export const vi = {
     name: 'Tên (tùy chọn)',
     watchFor: 'Theo dõi điều gì',
     noMonitors: 'Chưa có lệnh theo dõi nào.',
+    linkRecord: 'Liên kết bản ghi (tùy chọn)',
+    linkedTo: 'Liên kết với',
+    selectCategory: 'Chọn danh mục',
+    selectRecord: 'Chọn bản ghi',
+    deadline: 'Hạn chót',
   },
   films: {
     title: 'Phim của tôi',
@@ -220,6 +228,19 @@ export const vi = {
       funds_grants: 'Quỹ / Tài trợ',
       education_residency: 'Học thuật / Khu lưu trú',
     },
+  },
+  calendar: {
+    export: 'Xuất ra Lịch',
+    exportIcs: 'Tải ICS',
+    exportHint: 'Nhập vào Google Calendar, Apple Calendar hoặc ứng dụng hỗ trợ ICS.',
+  },
+  watchlist: {
+    title: 'Danh sách yêu thích',
+    subtitle: 'LHP, quỹ & chương trình đã đánh dấu',
+    noItems: 'Danh sách trống. Đánh dấu ⭐ từ tab LHP, Quỹ hoặc Học thuật.',
+    remove: 'Xóa',
+    addedOn: 'Đã thêm ngày',
+    notes: 'Ghi chú',
   },
   common: {
     viewDetails: 'Xem chi tiết',

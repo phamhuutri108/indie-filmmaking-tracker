@@ -50,9 +50,32 @@ export function Dashboard({ t }: { t: ReturnType<typeof useI18n> }) {
   return (
     <div>
       {/* Page header */}
-      <div style={{ marginBottom: 24 }}>
-        <h2 style={{ margin: '0 0 4px', fontSize: 22, color: '#1a202c' }}>{t.dashboard.title}</h2>
-        <p style={{ margin: 0, color: '#718096', fontSize: 14 }}>{t.dashboard.subtitle}</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 10 }}>
+        <div>
+          <h2 style={{ margin: '0 0 4px', fontSize: 22, color: '#1a202c' }}>{t.dashboard.title}</h2>
+          <p style={{ margin: 0, color: '#718096', fontSize: 14 }}>{t.dashboard.subtitle}</p>
+        </div>
+        <a
+          href="/api/calendar/export"
+          download="ift-deadlines.ics"
+          title={t.calendar.exportHint}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '7px 14px',
+            background: '#fff',
+            border: '1px solid #e2e8f0',
+            borderRadius: 6,
+            fontSize: 13,
+            fontWeight: 600,
+            color: '#2d3748',
+            textDecoration: 'none',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          📅 {t.calendar.exportIcs}
+        </a>
       </div>
 
       {/* Stats cards */}

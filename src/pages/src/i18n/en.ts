@@ -76,6 +76,9 @@ export const en = {
     search: 'Search funds...',
     addFund: 'Add Fund',
     noResults: 'No funds found.',
+    lastChecked: 'Last checked',
+    refresh: 'Refresh from web',
+    refreshing: 'Checking...',
     form: {
       title: 'Add Fund / Grant',
       name: 'Fund Name *',
@@ -137,6 +140,11 @@ export const en = {
     name: 'Name (optional)',
     watchFor: 'Watch for',
     noMonitors: 'No monitors set up yet.',
+    linkRecord: 'Link to record (optional)',
+    linkedTo: 'Linked to',
+    selectCategory: 'Select category',
+    selectRecord: 'Select record',
+    deadline: 'Deadline',
   },
   films: {
     title: 'My Films',
@@ -220,6 +228,19 @@ export const en = {
       funds_grants: 'Fund / Grant',
       education_residency: 'Education / Residency',
     },
+  },
+  calendar: {
+    export: 'Export to Calendar',
+    exportIcs: 'Download ICS',
+    exportHint: 'Import into Google Calendar, Apple Calendar, or any ICS-compatible app.',
+  },
+  watchlist: {
+    title: 'Watchlist',
+    subtitle: 'Starred festivals, funds & programs',
+    noItems: 'Your watchlist is empty. Star items from Festivals, Funds, or Education tabs.',
+    remove: 'Remove',
+    addedOn: 'Starred on',
+    notes: 'Notes',
   },
   common: {
     viewDetails: 'View Details',

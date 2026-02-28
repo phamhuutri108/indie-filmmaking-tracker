@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useI18n } from '../i18n';
 import { inputStyle, labelStyle, formRowStyle } from './Modal';
+import { DeadlineBadge } from './DeadlineBadge';
 import type { Monitor } from '../types';
 
 const API_BASE = '/api';
@@ -12,6 +13,19 @@ const WATCH_OPTIONS = [
   { value: 'announcement', label: 'Announcement' },
 ];
 
+const REF_TABLES = [
+  { value: 'festivals', label: 'Festival' },
+  { value: 'funds_grants', label: 'Fund / Grant' },
+  { value: 'education_residency', label: 'Education / Residency' },
+];
+
+interface RecordOption {
+  id: number;
+  name: string;
+  deadline?: string;
+  website?: string;
+}
+
 export function MonitorList({ t }: { t: ReturnType<typeof useI18n> }) {
   const [items, setItems] = useState<Monitor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,7 +34,11 @@ export function MonitorList({ t }: { t: ReturnType<typeof useI18n> }) {
     target_name: '',
     watch_for: 'deadline',
     alert_days_before: 7,
+    ref_table: '',
+    ref_id: 0,
   });
+  const [recordOptions, setRecordOptions] = useState<RecordOption[]>([]);
+  const [loadingRecords, setLoadingRecords] = useState(false);
 
   const load = () => {
     fetch(`${API_BASE}/monitors`)
@@ -32,14 +50,61 @@ export function MonitorList({ t }: { t: ReturnType<typeof useI18n> }) {
 
   useEffect(() => { load(); }, []);
 
+  // When ref_table changes, fetch the records for that table
+  useEffect(() => {
+    if (!form.ref_table) { setRecordOptions([]); return; }
+    setLoadingRecords(true);
+    const endpoint =
+      form.ref_table === 'festivals' ? `${API_BASE}/festivals?limit=100` :
+      form.ref_table === 'funds_grants' ? `${API_BASE}/funds` :
+      `${API_BASE}/education`;
+
+    fetch(endpoint)
+      .then((r) => r.json() as Promise<{ data: any[] }>)
+      .then((d) => {
+        setRecordOptions(
+          (d.data ?? []).map((row: any) => ({
+            id: row.id,
+            name: row.name,
+            deadline: row.regular_deadline ?? row.deadline,
+            website: row.website,
+          }))
+        );
+      })
+      .catch(() => setRecordOptions([]))
+      .finally(() => setLoadingRecords(false));
+  }, [form.ref_table]);
+
+  const handleRecordSelect = (id: number) => {
+    const rec = recordOptions.find((r) => r.id === id);
+    if (!rec) { setForm((f) => ({ ...f, ref_id: 0 })); return; }
+    setForm((f) => ({
+      ...f,
+      ref_id: rec.id,
+      target_name: f.target_name || rec.name,
+      target_url: f.target_url || rec.website || '',
+    }));
+  };
+
   const add = async () => {
     if (!form.target_url.trim()) return;
+    const body: Record<string, unknown> = {
+      target_url: form.target_url,
+      target_name: form.target_name,
+      watch_for: form.watch_for,
+      alert_days_before: form.alert_days_before,
+      monitor_type: form.ref_table ? form.ref_table.replace('_', '-') : 'custom',
+    };
+    if (form.ref_table) body.ref_table = form.ref_table;
+    if (form.ref_id) body.ref_id = form.ref_id;
+
     await fetch(`${API_BASE}/monitors`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, monitor_type: 'custom' }),
+      body: JSON.stringify(body),
     });
-    setForm({ target_url: '', target_name: '', watch_for: 'deadline', alert_days_before: 7 });
+    setForm({ target_url: '', target_name: '', watch_for: 'deadline', alert_days_before: 7, ref_table: '', ref_id: 0 });
+    setRecordOptions([]);
     load();
   };
 
@@ -76,6 +141,37 @@ export function MonitorList({ t }: { t: ReturnType<typeof useI18n> }) {
         <div style={{ fontWeight: 700, fontSize: 14, color: '#2d3748', marginBottom: 14 }}>
           + {t.monitors.addMonitor}
         </div>
+
+        {/* Link to record */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={labelStyle}>{t.monitors.linkRecord}</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <select
+              style={inputStyle}
+              value={form.ref_table}
+              onChange={(e) => setForm((f) => ({ ...f, ref_table: e.target.value, ref_id: 0 }))}
+            >
+              <option value="">— {t.monitors.selectCategory} —</option>
+              {REF_TABLES.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+            {form.ref_table && (
+              <select
+                style={inputStyle}
+                value={form.ref_id || ''}
+                onChange={(e) => handleRecordSelect(Number(e.target.value))}
+                disabled={loadingRecords}
+              >
+                <option value="">— {loadingRecords ? t.common.loading : t.monitors.selectRecord} —</option>
+                {recordOptions.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+
         <div style={formRowStyle}>
           <label style={labelStyle}>{t.monitors.url} *</label>
           <input
@@ -83,7 +179,7 @@ export function MonitorList({ t }: { t: ReturnType<typeof useI18n> }) {
             type="url"
             placeholder="https://festival.com/submissions"
             value={form.target_url}
-            onChange={(e) => setForm({ ...form, target_url: e.target.value })}
+            onChange={(e) => setForm((f) => ({ ...f, target_url: e.target.value }))}
           />
         </div>
         <div style={formRowStyle}>
@@ -92,7 +188,7 @@ export function MonitorList({ t }: { t: ReturnType<typeof useI18n> }) {
             style={inputStyle}
             placeholder="e.g. Sundance 2027"
             value={form.target_name}
-            onChange={(e) => setForm({ ...form, target_name: e.target.value })}
+            onChange={(e) => setForm((f) => ({ ...f, target_name: e.target.value }))}
           />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: 10, marginBottom: 14 }}>
@@ -101,7 +197,7 @@ export function MonitorList({ t }: { t: ReturnType<typeof useI18n> }) {
             <select
               style={inputStyle}
               value={form.watch_for}
-              onChange={(e) => setForm({ ...form, watch_for: e.target.value })}
+              onChange={(e) => setForm((f) => ({ ...f, watch_for: e.target.value }))}
             >
               {WATCH_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -116,22 +212,13 @@ export function MonitorList({ t }: { t: ReturnType<typeof useI18n> }) {
               min={1}
               max={90}
               value={form.alert_days_before}
-              onChange={(e) => setForm({ ...form, alert_days_before: Number(e.target.value) })}
+              onChange={(e) => setForm((f) => ({ ...f, alert_days_before: Number(e.target.value) }))}
             />
           </div>
         </div>
         <button
           onClick={add}
-          style={{
-            padding: '8px 20px',
-            background: '#2d3748',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 6,
-            cursor: 'pointer',
-            fontSize: 14,
-            fontWeight: 600,
-          }}
+          style={btnPrimary}
         >
           {t.monitors.addMonitor}
         </button>
@@ -188,6 +275,7 @@ function MonitorCard({
   onDeactivate: (id: number) => void;
 }) {
   const watchLabel = WATCH_OPTIONS.find((o) => o.value === m.watch_for)?.label ?? m.watch_for;
+  const refLabel = REF_TABLES.find((r) => r.value === m.ref_table)?.label;
   return (
     <div
       style={{
@@ -205,15 +293,27 @@ function MonitorCard({
     >
       <div>
         <strong style={{ fontSize: 14, color: '#1a202c' }}>
-          {m.target_name || new URL(m.target_url).hostname}
+          {m.target_name || (m.target_url ? (() => { try { return new URL(m.target_url).hostname; } catch { return m.target_url; } })() : '')}
         </strong>
+
+        {/* Linked record badge */}
+        {m.ref_name && (
+          <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={linkBadge}>{refLabel}</span>
+            <span style={{ fontSize: 13, color: '#2d3748' }}>{m.ref_name}</span>
+            {m.deadline && (
+              <DeadlineBadge deadline={m.deadline} t={t} />
+            )}
+          </div>
+        )}
+
         <div style={{ fontSize: 12, color: '#718096', marginTop: 4 }}>
           <span style={tagStyle}>{watchLabel}</span>
           <span style={{ marginLeft: 8 }}>
             Alert {m.alert_days_before} {t.monitors.alertDays}
           </span>
         </div>
-        {m.target_name && (
+        {m.target_url && (
           <div style={{ fontSize: 11, color: '#a0aec0', marginTop: 2 }}>
             <a href={m.target_url} target="_blank" rel="noreferrer" style={{ color: '#a0aec0' }}>
               {m.target_url}
@@ -267,5 +367,26 @@ const tagStyle: React.CSSProperties = {
   borderRadius: 4,
   padding: '1px 6px',
   fontSize: 11,
+  fontWeight: 600,
+};
+
+const linkBadge: React.CSSProperties = {
+  background: '#ebf8ff',
+  color: '#2b6cb0',
+  border: '1px solid #bee3f8',
+  borderRadius: 4,
+  padding: '1px 6px',
+  fontSize: 11,
+  fontWeight: 600,
+};
+
+const btnPrimary: React.CSSProperties = {
+  padding: '8px 20px',
+  background: '#2d3748',
+  color: '#fff',
+  border: 'none',
+  borderRadius: 6,
+  cursor: 'pointer',
+  fontSize: 14,
   fontWeight: 600,
 };

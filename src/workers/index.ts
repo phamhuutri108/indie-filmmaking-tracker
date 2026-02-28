@@ -6,6 +6,8 @@ import { cors } from 'hono/cors';
 import { getAssetFromKV, NotFoundError } from '@cloudflare/kv-asset-handler';
 import { handleCron } from './cron';
 import { scrapeAsianFilmFestivals } from './scraper';
+import { scrapeFunds } from './fund-scraper';
+import { generateICS, dbRowsToEvents } from './calendar';
 
 // Injected by wrangler at build time when [site] is configured
 // @ts-ignore
@@ -92,6 +94,19 @@ app.post('/api/festivals', async (c) => {
     .run();
 
   return c.json({ id: result.meta.last_row_id }, 201);
+});
+
+// ============================================================
+// Manual fund scrape trigger
+// ============================================================
+app.get('/api/funds/scrape', async (c) => {
+  const result = await scrapeFunds(c.env.DB);
+  return c.json({
+    saved: result.saved,
+    skipped: result.skipped,
+    errors: result.errors,
+    ts: new Date().toISOString(),
+  });
 });
 
 // ============================================================
@@ -191,7 +206,22 @@ app.post('/api/education', async (c) => {
 // ============================================================
 app.get('/api/monitors', async (c) => {
   const result = await c.env.DB.prepare(
-    `SELECT * FROM monitor_commands ORDER BY created_at DESC`
+    `SELECT mc.*,
+            CASE mc.ref_table
+              WHEN 'festivals' THEN f.name
+              WHEN 'funds_grants' THEN fg.name
+              WHEN 'education_residency' THEN er.name
+            END as ref_name,
+            CASE mc.ref_table
+              WHEN 'festivals' THEN f.regular_deadline
+              WHEN 'funds_grants' THEN fg.deadline
+              WHEN 'education_residency' THEN er.deadline
+            END as deadline
+     FROM monitor_commands mc
+     LEFT JOIN festivals f ON mc.ref_table = 'festivals' AND mc.ref_id = f.id
+     LEFT JOIN funds_grants fg ON mc.ref_table = 'funds_grants' AND mc.ref_id = fg.id
+     LEFT JOIN education_residency er ON mc.ref_table = 'education_residency' AND mc.ref_id = er.id
+     ORDER BY mc.created_at DESC`
   ).all();
   return c.json({ data: result.results });
 });
@@ -318,6 +348,69 @@ app.delete('/api/submissions/:id', async (c) => {
 });
 
 // ============================================================
+// MODULE 6: Watchlist
+// ============================================================
+app.get('/api/watchlist', async (c) => {
+  const result = await c.env.DB.prepare(
+    `SELECT w.*,
+            CASE w.ref_table
+              WHEN 'festivals' THEN f.name
+              WHEN 'funds_grants' THEN fg.name
+              WHEN 'education_residency' THEN er.name
+            END as ref_name,
+            CASE w.ref_table
+              WHEN 'festivals' THEN f.regular_deadline
+              WHEN 'funds_grants' THEN fg.deadline
+              WHEN 'education_residency' THEN er.deadline
+            END as deadline,
+            CASE w.ref_table
+              WHEN 'festivals' THEN f.website
+              WHEN 'funds_grants' THEN fg.website
+              WHEN 'education_residency' THEN er.website
+            END as website,
+            CASE w.ref_table
+              WHEN 'festivals' THEN f.country
+              WHEN 'funds_grants' THEN fg.country
+              WHEN 'education_residency' THEN er.country
+            END as country
+     FROM watchlist w
+     LEFT JOIN festivals f ON w.ref_table = 'festivals' AND w.ref_id = f.id
+     LEFT JOIN funds_grants fg ON w.ref_table = 'funds_grants' AND w.ref_id = fg.id
+     LEFT JOIN education_residency er ON w.ref_table = 'education_residency' AND w.ref_id = er.id
+     ORDER BY deadline ASC`
+  ).all();
+  return c.json({ data: result.results });
+});
+
+app.post('/api/watchlist', async (c) => {
+  const body = await c.req.json<Record<string, unknown>>();
+  const { ref_table, ref_id, notes } = body as any;
+  try {
+    const result = await c.env.DB.prepare(
+      `INSERT INTO watchlist (ref_table, ref_id, notes) VALUES (?, ?, ?)`
+    ).bind(ref_table, ref_id, notes ?? null).run();
+    return c.json({ id: result.meta.last_row_id }, 201);
+  } catch {
+    return c.json({ error: 'Already in watchlist' }, 409);
+  }
+});
+
+app.delete('/api/watchlist/:id', async (c) => {
+  await c.env.DB.prepare(`DELETE FROM watchlist WHERE id = ?`)
+    .bind(c.req.param('id'))
+    .run();
+  return c.json({ ok: true });
+});
+
+// Toggle by ref_table + ref_id (used by star buttons in lists)
+app.delete('/api/watchlist/ref/:ref_table/:ref_id', async (c) => {
+  await c.env.DB.prepare(
+    `DELETE FROM watchlist WHERE ref_table = ? AND ref_id = ?`
+  ).bind(c.req.param('ref_table'), c.req.param('ref_id')).run();
+  return c.json({ ok: true });
+});
+
+// ============================================================
 // Stats summary for dashboard cards
 // ============================================================
 app.get('/api/stats', async (c) => {
@@ -374,6 +467,53 @@ app.get('/api/dashboard', async (c) => {
   ).all();
 
   return c.json({ upcoming: result.results });
+});
+
+// ============================================================
+// Calendar Export (ICS)
+// ============================================================
+app.get('/api/calendar/export', async (c) => {
+  const include = (c.req.query('include') ?? 'festivals,funds,education').split(',');
+
+  const queries: Promise<{ results: any[] }>[] = [];
+
+  if (include.includes('festivals')) {
+    queries.push(
+      c.env.DB.prepare(
+        `SELECT 'festival' as type, id, name, regular_deadline as deadline, website
+         FROM festivals WHERE regular_deadline >= date('now') AND status = 'active'`
+      ).all() as Promise<{ results: any[] }>
+    );
+  }
+  if (include.includes('funds')) {
+    queries.push(
+      c.env.DB.prepare(
+        `SELECT 'fund' as type, id, name, deadline, website
+         FROM funds_grants WHERE deadline >= date('now') AND status = 'active'`
+      ).all() as Promise<{ results: any[] }>
+    );
+  }
+  if (include.includes('education')) {
+    queries.push(
+      c.env.DB.prepare(
+        `SELECT 'education' as type, id, name, deadline, website
+         FROM education_residency WHERE deadline >= date('now') AND status = 'active'`
+      ).all() as Promise<{ results: any[] }>
+    );
+  }
+
+  const results = await Promise.all(queries);
+  const allRows = results.flatMap((r) => r.results);
+  allRows.sort((a, b) => (a.deadline ?? '').localeCompare(b.deadline ?? ''));
+
+  const ics = generateICS(dbRowsToEvents(allRows));
+
+  return new Response(ics, {
+    headers: {
+      'Content-Type': 'text/calendar; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="ift-deadlines.ics"',
+    },
+  });
 });
 
 // ============================================================
