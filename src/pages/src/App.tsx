@@ -28,7 +28,10 @@ export default function App() {
   const [lang, setLang] = useState<Lang>('en');
   const [tab, setTab] = useState<Tab>(tabFromPath);
   const [showUsers, setShowUsers] = useState(false);
-  const [showSignIn, setShowSignIn] = useState(() => window.location.pathname === '/sign-in');
+  const [showSignIn, setShowSignIn] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return window.location.pathname === '/sign-in' || params.get('auth_status') === 'pending';
+  });
   const t = useI18n(lang);
   const { role, login, logout } = useAuth();
   const isOwner = role === 'owner';
