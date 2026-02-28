@@ -292,6 +292,7 @@ export function FestivalList({ t }: { t: ReturnType<typeof useI18n> }) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('');
+  const [tierFilter, setTierFilter] = useState('');
   const [selected, setSelected] = useState<Festival | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [watchlistIds, setWatchlistIds] = useState<Set<number>>(new Set());
@@ -336,6 +337,7 @@ export function FestivalList({ t }: { t: ReturnType<typeof useI18n> }) {
 
   const filtered = useMemo(() => {
     let list = items;
+    if (tierFilter) list = list.filter((f) => f.tier === tierFilter);
     if (catFilter) list = list.filter((f) => f.category === catFilter);
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -371,9 +373,15 @@ export function FestivalList({ t }: { t: ReturnType<typeof useI18n> }) {
           style={{ ...inputStyle, maxWidth: 280 }}
         />
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <FilterPill label={t.common.all} active={!catFilter} onClick={() => setCatFilter('')} />
+          <FilterPill label={t.common.all} active={!tierFilter} onClick={() => setTierFilter('')} color="#805ad5" />
+          {TIERS.map((tier) => (
+            <FilterPill key={tier} label={tier} active={tierFilter === tier} onClick={() => setTierFilter(tier)} color="#805ad5" />
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <FilterPill label={t.common.all} active={!catFilter} onClick={() => setCatFilter('')} color="#3182CE" />
           {CATEGORIES.map((c) => (
-            <FilterPill key={c} label={c} active={catFilter === c} onClick={() => setCatFilter(c)} />
+            <FilterPill key={c} label={c} active={catFilter === c} onClick={() => setCatFilter(c)} color="#3182CE" />
           ))}
         </div>
       </div>
@@ -455,10 +463,12 @@ function FilterPill({
   label,
   active,
   onClick,
+  color = '#3182CE',
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
+  color?: string;
 }) {
   return (
     <button
@@ -467,8 +477,8 @@ function FilterPill({
         padding: '4px 12px',
         borderRadius: 20,
         border: '1px solid',
-        borderColor: active ? '#3182CE' : '#e2e8f0',
-        background: active ? '#3182CE' : '#fff',
+        borderColor: active ? color : '#e2e8f0',
+        background: active ? color : '#fff',
         color: active ? '#fff' : '#4a5568',
         fontSize: 13,
         cursor: 'pointer',

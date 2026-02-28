@@ -57,6 +57,7 @@ const COUNTRY_TAG_MAP: Record<string, string> = {
 };
 
 const ASIAN_FILM_FESTIVALS_FEED = 'https://asianfilmfestivals.com/feed';
+const CINEUROPA_RSS_FEED = 'https://cineuropa.org/rss/?lang=en';
 
 // ============================================================
 // Low-level XML / HTML helpers
@@ -460,6 +461,89 @@ export async function scrapeAsianFilmFestivals(db: D1Database): Promise<ScrapeRe
   const result = await saveFestivals(db, festivals);
   console.log(
     `[Scraper] Done — saved: ${result.saved}, skipped: ${result.skipped}` +
+    (result.errors.length ? `, errors: ${result.errors.join('; ')}` : '')
+  );
+  return result;
+}
+
+// ============================================================
+// Cineuropa RSS scraper (European festivals & funds)
+// ============================================================
+
+/**
+ * Parse one Cineuropa RSS item into a ParsedFestival.
+ * Only processes "call for entries / open call" articles.
+ */
+export function parseCineuropaItem(item: RssItem): ParsedFestival | null {
+  const titleLower = item.title.toLowerCase();
+  const isCallForEntry =
+    titleLower.includes('call for entries') ||
+    titleLower.includes('call for submissions') ||
+    titleLower.includes('open for submissions') ||
+    titleLower.includes('submissions open') ||
+    titleLower.includes('open call');
+
+  if (!isCallForEntry) return null;
+
+  const year = pubDateYear(item.pubDate);
+
+  // Extract festival name: remove trailing action phrase from title
+  const name = item.title
+    .replace(/\s*[–—:]\s*(call for entries|call for submissions|open call|submissions open).*/i, '')
+    .replace(/\s+(opens?|launches?|announces?|invites?)\s+(call for|submissions?|applications?).*/i, '')
+    .replace(/\s*\d{4}$/, '')
+    .trim();
+
+  if (!name || name.length < 4) return null;
+
+  const { early, regular } = extractDeadlines(item.content, item.description, year);
+
+  return {
+    name,
+    country: null,
+    website: item.link,
+    filmfreeway_url: null,
+    category: inferCategory(item.categories, item.content),
+    early_deadline: early,
+    regular_deadline: regular,
+    notification_date: null,
+    festival_dates: null,
+    description: stripHtml(item.description).slice(0, 300),
+    source: 'rss',
+  };
+}
+
+/**
+ * Fetch Cineuropa RSS, parse call-for-entry items,
+ * and persist new European festivals to D1.
+ */
+export async function scrapeCineuropaRss(db: D1Database): Promise<ScrapeResult> {
+  const items = await fetchRssFeed(CINEUROPA_RSS_FEED);
+  console.log(`[Scraper] Fetched ${items.length} RSS items from cineuropa.org`);
+
+  const festivals: ParsedFestival[] = [];
+  for (const item of items) {
+    const parsed = parseCineuropaItem(item);
+    if (parsed) festivals.push(parsed);
+  }
+  console.log(`[Scraper] Parsed ${festivals.length} call-for-entry items from Cineuropa`);
+
+  for (const item of items) {
+    try {
+      await db
+        .prepare(
+          `INSERT OR IGNORE INTO rss_cache
+             (feed_url, item_guid, title, link, pub_date, content, processed)
+           VALUES (?, ?, ?, ?, ?, ?, 1)`
+        )
+        .bind(CINEUROPA_RSS_FEED, item.guid, item.title, item.link, item.pubDate, item.description)
+        .run();
+    } catch { /* cache is non-critical */ }
+  }
+
+  const result = await saveFestivals(db, festivals);
+  console.log(
+    `[Scraper] Cineuropa — saved: ${result.saved}, skipped: ${result.skipped}` +
     (result.errors.length ? `, errors: ${result.errors.join('; ')}` : '')
   );
   return result;

@@ -1,7 +1,7 @@
 // IFT Cron Job — Daily at 08:00 UTC
 // Runs via Cloudflare Cron Trigger
 
-import { scrapeAsianFilmFestivals } from './scraper';
+import { scrapeAsianFilmFestivals, scrapeCineuropaRss } from './scraper';
 import { scrapeFunds } from './fund-scraper';
 
 export interface Env {
@@ -16,6 +16,7 @@ export async function handleCron(env: Env): Promise<void> {
 
   await Promise.allSettled([
     runScraper(env),
+    runCineuropa(env),
     runFundScraper(env),
     checkMonitorCommands(env),
     sendDailyDigest(env),
@@ -33,6 +34,16 @@ async function runFundScraper(env: Env): Promise<void> {
     }
   } catch (err) {
     console.error('[Cron] FundScraper failed:', err);
+  }
+}
+
+async function runCineuropa(env: Env): Promise<void> {
+  try {
+    const result = await scrapeCineuropaRss(env.DB);
+    console.log(`[Cron] Cineuropa — saved: ${result.saved}, skipped: ${result.skipped}`);
+    if (result.errors.length) console.error('[Cron] Cineuropa errors:', result.errors);
+  } catch (err) {
+    console.error('[Cron] Cineuropa failed:', err);
   }
 }
 
