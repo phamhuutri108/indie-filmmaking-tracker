@@ -372,20 +372,28 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
           placeholder={t.festivals.search}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ ...inputStyle, maxWidth: 280 }}
+          style={{ ...inputStyle, flex: 1, minWidth: 180 }}
         />
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <FilterPill label={t.common.all} active={!tierFilter} onClick={() => setTierFilter('')} color="#805ad5" />
+        <select
+          value={tierFilter}
+          onChange={(e) => setTierFilter(e.target.value)}
+          style={{ ...inputStyle, width: 'auto', minWidth: 140 }}
+        >
+          <option value="">All tiers</option>
           {TIERS.map((tier) => (
-            <FilterPill key={tier} label={tier} active={tierFilter === tier} onClick={() => setTierFilter(tier)} color="#805ad5" />
+            <option key={tier} value={tier}>{tier.charAt(0).toUpperCase() + tier.slice(1)}</option>
           ))}
-        </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <FilterPill label={t.common.all} active={!catFilter} onClick={() => setCatFilter('')} color="#004aad" />
+        </select>
+        <select
+          value={catFilter}
+          onChange={(e) => setCatFilter(e.target.value)}
+          style={{ ...inputStyle, width: 'auto', minWidth: 160 }}
+        >
+          <option value="">All categories</option>
           {CATEGORIES.map((c) => (
-            <FilterPill key={c} label={c} active={catFilter === c} onClick={() => setCatFilter(c)} color="#004aad" />
+            <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
           ))}
-        </div>
+        </select>
       </div>
 
       {/* List */}
@@ -463,38 +471,6 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-function FilterPill({
-  label,
-  active,
-  onClick,
-  color = '#004aad',
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  color?: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        padding: '4px 12px',
-        borderRadius: 20,
-        border: '1px solid',
-        borderColor: active ? color : '#e2e8f0',
-        background: active ? color : '#fff',
-        color: active ? '#fff' : '#4a5568',
-        fontSize: 13,
-        cursor: 'pointer',
-        fontWeight: active ? 600 : 400,
-        textTransform: 'capitalize',
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

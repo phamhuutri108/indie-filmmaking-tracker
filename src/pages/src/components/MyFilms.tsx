@@ -360,6 +360,21 @@ export function MyFilms({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwner
     load();
   };
 
+  if (!isOwner) {
+    return (
+      <div>
+        <div style={{ marginBottom: 20 }}>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#1a202c' }}>{tf.title}</h1>
+          <p style={{ margin: '4px 0 0', color: '#718096', fontSize: 14 }}>{tf.subtitle}</p>
+        </div>
+        <div style={{ textAlign: 'center', padding: '48px 24px', border: '1px dashed #e2e8f0', borderRadius: 8, background: '#fafbfc' }}>
+          <p style={{ margin: '0 0 4px', fontWeight: 600, color: '#2d3748' }}>Sign in to use this feature</p>
+          <p style={{ margin: 0, fontSize: 13, color: '#718096' }}>Đăng nhập để quản lý danh mục phim cá nhân của bạn.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Header */}
@@ -401,7 +416,6 @@ export function MyFilms({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwner
         <p style={{ color: '#718096' }}>{tc.loading}</p>
       ) : filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '48px 16px', color: '#718096' }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>🎬</div>
           <p style={{ margin: 0 }}>{films.length === 0 ? tf.noFilms : tc.noData}</p>
         </div>
       ) : (

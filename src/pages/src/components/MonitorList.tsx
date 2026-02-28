@@ -117,6 +117,21 @@ export function MonitorList({ t, isOwner }: { t: ReturnType<typeof useI18n>; isO
   const active = items.filter((m) => m.is_active);
   const inactive = items.filter((m) => !m.is_active);
 
+  if (!isOwner) {
+    return (
+      <div>
+        <div style={{ marginBottom: 20 }}>
+          <h2 style={{ margin: '0 0 4px', fontSize: 22, color: '#1a202c' }}>{t.monitors.title}</h2>
+          <p style={{ margin: 0, color: '#718096', fontSize: 14 }}>{t.monitors.subtitle}</p>
+        </div>
+        <div style={guestPrompt}>
+          <p style={{ margin: '0 0 4px', fontWeight: 600, color: '#2d3748' }}>Sign in to use this feature</p>
+          <p style={{ margin: 0, fontSize: 13, color: '#718096' }}>Đăng nhập để thiết lập monitor và nhận cảnh báo deadline.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return <div style={{ textAlign: 'center', padding: 48, color: '#718096' }}>{t.common.loading}</div>;
   }
@@ -381,6 +396,14 @@ const linkBadge: React.CSSProperties = {
   padding: '1px 6px',
   fontSize: 11,
   fontWeight: 600,
+};
+
+const guestPrompt: React.CSSProperties = {
+  textAlign: 'center',
+  padding: '48px 24px',
+  border: '1px dashed #e2e8f0',
+  borderRadius: 8,
+  background: '#fafbfc',
 };
 
 const btnPrimary: React.CSSProperties = {

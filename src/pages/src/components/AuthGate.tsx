@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { setToken, setGuest, clearAuth, readStoredAuth, decodeJWT } from '../apiFetch';
+import { setToken, clearAuth, readStoredAuth, decodeJWT } from '../apiFetch';
 
 export type Role = 'owner' | 'member' | 'guest' | null;
 
@@ -8,17 +8,13 @@ export function useAuth() {
   const [role, setRole] = useState<Role>(stored.role);
 
   const login = (newRole: Role, token?: string) => {
-    if (token) {
-      setToken(token);
-    } else if (newRole === 'guest') {
-      setGuest();
-    }
+    if (token) setToken(token);
     setRole(newRole);
   };
 
   const logout = () => {
     clearAuth();
-    setRole(null);
+    setRole('guest');
   };
 
   return { role, login, logout };
@@ -34,11 +30,16 @@ export function getAuthUserName(): string | null {
   return null;
 }
 
-export function AuthGate({ onAuth }: { onAuth: (role: Role, token?: string) => void }) {
+export function AuthGate({
+  onAuth,
+  onClose,
+}: {
+  onAuth: (role: Role, token?: string) => void;
+  onClose?: () => void;
+}) {
   const [mode, setMode] = useState<'choose' | 'owner_password' | 'pending'>(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('auth_status') === 'pending') return 'pending';
-    // Secret owner login URL: /owner
     if (window.location.pathname === '/owner') return 'owner_password';
     return 'choose';
   });
@@ -70,8 +71,9 @@ export function AuthGate({ onAuth }: { onAuth: (role: Role, token?: string) => v
     setLoading(false);
   };
 
-  const loginWithGoogle = () => {
-    window.location.href = '/api/auth/google';
+  const close = () => {
+    window.history.replaceState({}, '', window.location.pathname === '/sign-in' ? '/' : window.location.pathname);
+    onClose?.();
   };
 
   return (
@@ -89,7 +91,22 @@ export function AuthGate({ onAuth }: { onAuth: (role: Role, token?: string) => v
         background: '#fff', borderRadius: 12,
         padding: '32px 36px', maxWidth: 400, width: '100%',
         boxShadow: '0 8px 40px rgba(0,0,0,0.2)',
+        position: 'relative',
       }}>
+
+        {/* Close button */}
+        {onClose && mode === 'choose' && (
+          <button
+            onClick={close}
+            style={{
+              position: 'absolute', top: 12, right: 12,
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontSize: 18, color: '#a0aec0', lineHeight: 1, padding: 4,
+            }}
+          >
+            ✕
+          </button>
+        )}
 
         {mode === 'choose' && (
           <>
@@ -98,15 +115,12 @@ export function AuthGate({ onAuth }: { onAuth: (role: Role, token?: string) => v
               <span style={{ display: 'block', fontSize: 20, fontWeight: 700, color: '#1a202c' }}>Indie Filmmaking Tracker</span>
             </h2>
             <p style={{ margin: '0 0 28px', fontSize: 13, color: '#718096', textAlign: 'center' }}>
-              How would you like to continue?
+              Sign in to access all features.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button onClick={loginWithGoogle} style={btnGoogle}>
+              <button onClick={() => window.location.href = '/api/auth/google'} style={btnGoogle}>
                 <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" style={{ width: 18, height: 18 }} />
                 Continue with Google
-              </button>
-              <button onClick={() => onAuth('guest')} style={btnGuest}>
-                👁 Guest — View Only
               </button>
             </div>
           </>
@@ -140,33 +154,30 @@ export function AuthGate({ onAuth }: { onAuth: (role: Role, token?: string) => v
             )}
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => { setMode('choose'); setError(''); setPw(''); window.history.replaceState({}, '', '/'); }} style={btnBack}>
-                ← Back
+                Back
               </button>
               <button onClick={tryOwnerLogin} disabled={loading} style={{ ...btnOwner, flex: 1, opacity: loading ? 0.7 : 1 }}>
-                {loading ? '…' : 'Login'}
+                {loading ? '...' : 'Login'}
               </button>
             </div>
           </>
         )}
 
         {mode === 'pending' && (
-          <>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
-              <h2 style={{ margin: '0 0 8px', fontSize: 18, color: '#1a202c' }}>
-                Request Sent!
-              </h2>
-              <p style={{ margin: '0 0 20px', fontSize: 13, color: '#718096', lineHeight: 1.6 }}>
-                Your access request has been sent to the admin. You'll be able to log in once approved.
-              </p>
-              <p style={{ margin: '0 0 20px', fontSize: 12, color: '#a0aec0', lineHeight: 1.6 }}>
-                Yêu cầu của bạn đã được gửi đi. Admin sẽ duyệt trong thời gian sớm nhất.
-              </p>
-              <button onClick={() => { setMode('choose'); window.history.replaceState({}, '', '/'); }} style={btnGuest}>
-                ← Back
-              </button>
-            </div>
-          </>
+          <div style={{ textAlign: 'center' }}>
+            <h2 style={{ margin: '0 0 8px', fontSize: 18, color: '#1a202c' }}>
+              Request Sent!
+            </h2>
+            <p style={{ margin: '0 0 20px', fontSize: 13, color: '#718096', lineHeight: 1.6 }}>
+              Your access request has been sent to the admin. You'll be able to log in once approved.
+            </p>
+            <p style={{ margin: '0 0 20px', fontSize: 12, color: '#a0aec0', lineHeight: 1.6 }}>
+              Yêu cầu của bạn đã được gửi đi. Admin sẽ duyệt trong thời gian sớm nhất.
+            </p>
+            <button onClick={() => { setMode('choose'); window.history.replaceState({}, '', '/'); }} style={btnGuest}>
+              Back
+            </button>
+          </div>
         )}
       </div>
     </div>

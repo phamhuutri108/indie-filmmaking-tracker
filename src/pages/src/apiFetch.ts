@@ -52,8 +52,8 @@ export function readStoredAuth(): StoredAuth {
     const payload = decodeJWT(token);
     if (payload) return { role: payload.role as 'owner' | 'member', token };
   }
-  if (isGuest()) return { role: 'guest', token: null };
-  return { role: null, token: null };
+  // Default to guest when no auth stored
+  return { role: 'guest', token: null };
 }
 
 /** Fetch wrapper that adds Authorization header when a token is present */

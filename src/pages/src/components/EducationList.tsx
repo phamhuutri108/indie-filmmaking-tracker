@@ -314,14 +314,18 @@ export function EducationList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof
           placeholder={t.education.search}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ ...inputStyle, maxWidth: 280 }}
+          style={{ ...inputStyle, flex: 1, minWidth: 180 }}
         />
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <FilterPill label={t.common.all} active={!typeFilter} onClick={() => setTypeFilter('')} />
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          style={{ ...inputStyle, width: 'auto', minWidth: 140 }}
+        >
+          <option value="">All types</option>
           {EDU_TYPES.map((c) => (
-            <FilterPill key={c} label={c} active={typeFilter === c} onClick={() => setTypeFilter(c)} />
+            <option key={c} value={c} style={{ textTransform: 'capitalize' }}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
           ))}
-        </div>
+        </select>
       </div>
 
       {loading ? (
@@ -385,28 +389,6 @@ export function EducationList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-function FilterPill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        padding: '4px 12px',
-        borderRadius: 20,
-        border: '1px solid',
-        borderColor: active ? '#805ad5' : '#e2e8f0',
-        background: active ? '#805ad5' : '#fff',
-        color: active ? '#fff' : '#4a5568',
-        fontSize: 13,
-        cursor: 'pointer',
-        fontWeight: active ? 600 : 400,
-        textTransform: 'capitalize',
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

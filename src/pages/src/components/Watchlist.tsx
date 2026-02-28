@@ -50,6 +50,21 @@ export function Watchlist({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwn
     education_residency: items.filter((i) => i.ref_table === 'education_residency').length,
   }), [items]);
 
+  if (!isOwner) {
+    return (
+      <div>
+        <div style={{ marginBottom: 20 }}>
+          <h2 style={{ margin: '0 0 4px', fontSize: 22, color: '#1a202c' }}>{t.watchlist.title}</h2>
+          <p style={{ margin: 0, color: '#718096', fontSize: 14 }}>{t.watchlist.subtitle}</p>
+        </div>
+        <div style={{ textAlign: 'center', padding: '48px 24px', border: '1px dashed #e2e8f0', borderRadius: 8, background: '#fafbfc' }}>
+          <p style={{ margin: '0 0 4px', fontWeight: 600, color: '#2d3748' }}>Sign in to use this feature</p>
+          <p style={{ margin: 0, fontSize: 13, color: '#718096' }}>Đăng nhập để lưu và theo dõi các liên hoan, quỹ, học bổng yêu thích.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div style={{ marginBottom: 20 }}>
@@ -88,7 +103,7 @@ export function Watchlist({ t, isOwner }: { t: ReturnType<typeof useI18n>; isOwn
             lineHeight: 1.7,
           }}
         >
-          ⭐ {t.watchlist.noItems}
+          {t.watchlist.noItems}
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 10 }}>

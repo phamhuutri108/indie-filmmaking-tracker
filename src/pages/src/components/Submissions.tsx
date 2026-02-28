@@ -368,6 +368,21 @@ export function Submissions({ t, isOwner }: { t: ReturnType<typeof useI18n>; isO
     load();
   };
 
+  if (!isOwner) {
+    return (
+      <div>
+        <div style={{ marginBottom: 20 }}>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#1a202c' }}>{ts.title}</h1>
+          <p style={{ margin: '4px 0 0', color: '#718096', fontSize: 14 }}>{ts.subtitle}</p>
+        </div>
+        <div style={{ textAlign: 'center', padding: '48px 24px', border: '1px dashed #e2e8f0', borderRadius: 8, background: '#fafbfc' }}>
+          <p style={{ margin: '0 0 4px', fontWeight: 600, color: '#2d3748' }}>Sign in to use this feature</p>
+          <p style={{ margin: 0, fontSize: 13, color: '#718096' }}>Đăng nhập để theo dõi các submission của bạn.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Header */}
@@ -378,8 +393,7 @@ export function Submissions({ t, isOwner }: { t: ReturnType<typeof useI18n>; isO
         </div>
         <button
           onClick={() => setEditing('new')}
-          style={{ background: '#004aad', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 18px', cursor: 'pointer', fontSize: 14, fontWeight: 600,
-            display: isOwner ? 'inline-block' : 'none' }}
+          style={{ background: '#004aad', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 18px', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}
         >
           + {ts.addSubmission}
         </button>
@@ -434,7 +448,6 @@ export function Submissions({ t, isOwner }: { t: ReturnType<typeof useI18n>; isO
         <p style={{ color: '#718096' }}>{tc.loading}</p>
       ) : filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '48px 16px', color: '#718096' }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
           <p style={{ margin: 0 }}>{submissions.length === 0 ? ts.noSubmissions : tc.noData}</p>
           {submissions.length === 0 && (
             <p style={{ margin: '8px 0 0', fontSize: 13 }}>
