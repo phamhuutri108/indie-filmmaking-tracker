@@ -254,6 +254,33 @@ app.delete('/api/auth/users/:id', async (c) => {
 });
 
 // ============================================================
+// Feedback
+// ============================================================
+app.post('/api/feedback', async (c) => {
+  const { name, email, message } = await c.req.json<{ name: string; email: string; message: string }>();
+  if (!name?.trim() || !email?.trim() || !message?.trim()) {
+    return c.json({ error: 'Missing fields' }, 400);
+  }
+  if (c.env.RESEND_API_KEY) {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${c.env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'IFT Feedback <noreply@ift.phamhuutri.com>',
+        to: ['support@phamhuutri.com'],
+        reply_to: email,
+        subject: `[IFT Feedback] ${name}`,
+        html: `<p><strong>Tên:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><p><strong>Lời nhắn:</strong></p><p style="white-space:pre-wrap">${message}</p>`,
+      }),
+    });
+  }
+  return c.json({ ok: true });
+});
+
+// ============================================================
 // Manual triggers
 // ============================================================
 app.get('/api/scrape', async (c) => {
