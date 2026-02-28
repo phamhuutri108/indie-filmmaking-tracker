@@ -91,13 +91,13 @@ const BIO: Record<Lang, { p1: string; p2: string; p3: JSX.Element; p4: string; f
 export function Home({ lang }: { lang: Lang }) {
   const bio = BIO[lang];
   const features = FEATURES[lang];
-  const pStyle: React.CSSProperties = { fontSize: 15, color: '#4a5568', lineHeight: 1.8, margin: '0 0 18px', textAlign: 'justify' };
+  const pStyle: React.CSSProperties = { fontSize: 14, color: '#4a5568', lineHeight: 1.75, margin: '0 0 16px', textAlign: 'justify' };
 
   return (
     <div style={{ padding: '48px 24px 80px', maxWidth: 820, margin: '0 auto' }}>
 
       {/* Bio section */}
-      <div style={{ display: 'flex', gap: 56, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 72, alignItems: 'stretch' }}>
+      <div style={{ display: 'flex', gap: 48, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 72, alignItems: 'center' }}>
 
         <div style={{ flex: 1, minWidth: 260 }}>
           <p style={pStyle}>{bio.p1}</p>
@@ -109,7 +109,7 @@ export function Home({ lang }: { lang: Lang }) {
         <img
           src="/profile-image.jpeg"
           alt="Tri Pham"
-          style={{ width: 340, flexShrink: 0, borderRadius: 8, objectFit: 'cover', objectPosition: 'top' }}
+          style={{ width: 270, aspectRatio: '3/4', objectFit: 'cover', objectPosition: 'top', flexShrink: 0, borderRadius: 8 }}
         />
       </div>
 
