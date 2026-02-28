@@ -109,6 +109,13 @@ app.get('/api/funds/scrape', async (c) => {
   });
 });
 
+// Manual cron trigger (for testing)
+// ============================================================
+app.get('/api/cron/run', async (c) => {
+  await handleCron(c.env);
+  return c.json({ ok: true, ts: new Date().toISOString() });
+});
+
 // ============================================================
 // MODULE 2: Funds & Grants
 // ============================================================
