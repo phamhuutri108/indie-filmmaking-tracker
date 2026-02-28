@@ -42,7 +42,12 @@ export default function App() {
           boxShadow: '0 2px 8px rgba(0,74,173,0.3)',
         }}
       >
-        <img src="/ift-logo.png" alt="IFT — Indie Filmmaking Tracker" style={{ height: 40, objectFit: 'contain' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <img src="/ift-logo.png" alt="IFT" style={{ height: 36, objectFit: 'contain' }} />
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', borderLeft: '1px solid rgba(255,255,255,0.3)', paddingLeft: 12, letterSpacing: '0.12em', fontWeight: 600, textTransform: 'uppercase' }}>
+            Indie Filmmaking Tracker
+          </span>
+        </div>
         <button
           onClick={() => setLang(lang === 'en' ? 'vi' : 'en')}
           style={{
