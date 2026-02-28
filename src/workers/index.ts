@@ -120,6 +120,26 @@ app.get('/api/funds/:id', async (c) => {
   return row ? c.json(row) : c.json({ error: 'Not found' }, 404);
 });
 
+app.post('/api/funds', async (c) => {
+  const body = await c.req.json<Record<string, unknown>>();
+  const {
+    name, name_vi, organization, country, website,
+    type, focus, region_focus, max_amount, currency,
+    open_date, deadline, eligibility, eligibility_vi,
+    description, description_vi,
+  } = body as any;
+  const result = await c.env.DB.prepare(
+    `INSERT INTO funds_grants (name, name_vi, organization, country, website, type, focus, region_focus,
+      max_amount, currency, open_date, deadline, eligibility, eligibility_vi, description, description_vi)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  )
+    .bind(name, name_vi, organization, country, website, type, focus, region_focus,
+      max_amount, currency ?? 'USD', open_date, deadline, eligibility, eligibility_vi,
+      description, description_vi)
+    .run();
+  return c.json({ id: result.meta.last_row_id }, 201);
+});
+
 // ============================================================
 // MODULE 3: Education & Residency
 // ============================================================
@@ -142,6 +162,28 @@ app.get('/api/education/:id', async (c) => {
     .bind(c.req.param('id'))
     .first();
   return row ? c.json(row) : c.json({ error: 'Not found' }, 404);
+});
+
+app.post('/api/education', async (c) => {
+  const body = await c.req.json<Record<string, unknown>>();
+  const {
+    name, name_vi, organization, country, city, website,
+    type, duration, application_open, deadline, program_dates,
+    stipend, covers_travel, covers_accommodation,
+    eligibility, eligibility_vi, description, description_vi,
+  } = body as any;
+  const result = await c.env.DB.prepare(
+    `INSERT INTO education_residency (name, name_vi, organization, country, city, website, type,
+      duration, application_open, deadline, program_dates, stipend, covers_travel,
+      covers_accommodation, eligibility, eligibility_vi, description, description_vi)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  )
+    .bind(name, name_vi, organization, country, city, website, type,
+      duration, application_open, deadline, program_dates, stipend ?? null,
+      covers_travel ? 1 : 0, covers_accommodation ? 1 : 0,
+      eligibility, eligibility_vi, description, description_vi)
+    .run();
+  return c.json({ id: result.meta.last_row_id }, 201);
 });
 
 // ============================================================
@@ -175,6 +217,147 @@ app.delete('/api/monitors/:id', async (c) => {
   return c.json({ ok: true });
 });
 
+// ============================================================
+// MODULE 5: My Films
+// ============================================================
+app.get('/api/films', async (c) => {
+  const { status, genre } = c.req.query();
+  let query = `SELECT * FROM films WHERE 1=1`;
+  const params: unknown[] = [];
+  if (status) { query += ` AND status = ?`; params.push(status); }
+  if (genre)  { query += ` AND genre = ?`;  params.push(genre); }
+  query += ` ORDER BY year DESC, title ASC`;
+  const result = await c.env.DB.prepare(query).bind(...params).all();
+  return c.json({ data: result.results });
+});
+
+app.get('/api/films/:id', async (c) => {
+  const row = await c.env.DB.prepare(`SELECT * FROM films WHERE id = ?`)
+    .bind(c.req.param('id'))
+    .first();
+  return row ? c.json(row) : c.json({ error: 'Not found' }, 404);
+});
+
+app.post('/api/films', async (c) => {
+  const body = await c.req.json<Record<string, unknown>>();
+  const { title, title_vi, year, genre, duration_min, logline, logline_vi,
+          director, producer, status, poster_url, trailer_url, notes } = body as any;
+  const result = await c.env.DB.prepare(
+    `INSERT INTO films (title, title_vi, year, genre, duration_min, logline, logline_vi,
+      director, producer, status, poster_url, trailer_url, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(title, title_vi, year, genre, duration_min, logline, logline_vi,
+    director ?? 'Tri Pham', producer, status ?? 'in-production', poster_url, trailer_url, notes).run();
+  return c.json({ id: result.meta.last_row_id }, 201);
+});
+
+app.put('/api/films/:id', async (c) => {
+  const body = await c.req.json<Record<string, unknown>>();
+  const { title, title_vi, year, genre, duration_min, logline, logline_vi,
+          director, producer, status, poster_url, trailer_url, notes } = body as any;
+  await c.env.DB.prepare(
+    `UPDATE films SET title=?, title_vi=?, year=?, genre=?, duration_min=?, logline=?, logline_vi=?,
+      director=?, producer=?, status=?, poster_url=?, trailer_url=?, notes=?,
+      updated_at=CURRENT_TIMESTAMP WHERE id=?`
+  ).bind(title, title_vi, year, genre, duration_min, logline, logline_vi,
+    director, producer, status, poster_url, trailer_url, notes, c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+app.delete('/api/films/:id', async (c) => {
+  await c.env.DB.prepare(`DELETE FROM films WHERE id = ?`).bind(c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+// ============================================================
+// MODULE 5: Submissions
+// ============================================================
+app.get('/api/submissions', async (c) => {
+  const { film_id, status, ref_table } = c.req.query();
+  let query = `SELECT * FROM submissions WHERE 1=1`;
+  const params: unknown[] = [];
+  if (film_id)   { query += ` AND film_id = ?`;   params.push(Number(film_id)); }
+  if (status)    { query += ` AND status = ?`;     params.push(status); }
+  if (ref_table) { query += ` AND ref_table = ?`;  params.push(ref_table); }
+  query += ` ORDER BY created_at DESC`;
+  const result = await c.env.DB.prepare(query).bind(...params).all();
+  return c.json({ data: result.results });
+});
+
+app.post('/api/submissions', async (c) => {
+  const body = await c.req.json<Record<string, unknown>>();
+  const { film_id, film_title, ref_table, ref_id, ref_name, deadline,
+          submitted_at, submission_platform, submission_url, entry_fee_paid,
+          status, result_date, notes } = body as any;
+  const result = await c.env.DB.prepare(
+    `INSERT INTO submissions (film_id, film_title, ref_table, ref_id, ref_name, deadline,
+      submitted_at, submission_platform, submission_url, entry_fee_paid, status, result_date, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(film_id, film_title, ref_table, ref_id, ref_name, deadline,
+    submitted_at, submission_platform ?? 'direct', submission_url, entry_fee_paid,
+    status ?? 'draft', result_date, notes).run();
+  return c.json({ id: result.meta.last_row_id }, 201);
+});
+
+app.put('/api/submissions/:id', async (c) => {
+  const body = await c.req.json<Record<string, unknown>>();
+  const { status, submitted_at, result_date, notes, entry_fee_paid,
+          submission_platform, submission_url } = body as any;
+  await c.env.DB.prepare(
+    `UPDATE submissions SET status=?, submitted_at=?, result_date=?, notes=?,
+      entry_fee_paid=?, submission_platform=?, submission_url=?, updated_at=CURRENT_TIMESTAMP
+     WHERE id=?`
+  ).bind(status, submitted_at, result_date, notes, entry_fee_paid,
+    submission_platform, submission_url, c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+app.delete('/api/submissions/:id', async (c) => {
+  await c.env.DB.prepare(`DELETE FROM submissions WHERE id = ?`).bind(c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+// ============================================================
+// Stats summary for dashboard cards
+// ============================================================
+app.get('/api/stats', async (c) => {
+  const [festivals, funds, education, upcoming7, upcoming30, films, submissions] = await Promise.all([
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM festivals WHERE status = 'active'`).first<{ count: number }>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM funds_grants WHERE status = 'active'`).first<{ count: number }>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM education_residency WHERE status = 'active'`).first<{ count: number }>(),
+    c.env.DB.prepare(`
+      SELECT COUNT(*) as count FROM (
+        SELECT regular_deadline as d FROM festivals WHERE status='active' AND regular_deadline BETWEEN date('now') AND date('now', '+7 days')
+        UNION ALL
+        SELECT deadline as d FROM funds_grants WHERE status='active' AND deadline BETWEEN date('now') AND date('now', '+7 days')
+        UNION ALL
+        SELECT deadline as d FROM education_residency WHERE status='active' AND deadline BETWEEN date('now') AND date('now', '+7 days')
+      )
+    `).first<{ count: number }>(),
+    c.env.DB.prepare(`
+      SELECT COUNT(*) as count FROM (
+        SELECT regular_deadline as d FROM festivals WHERE status='active' AND regular_deadline BETWEEN date('now') AND date('now', '+30 days')
+        UNION ALL
+        SELECT deadline as d FROM funds_grants WHERE status='active' AND deadline BETWEEN date('now') AND date('now', '+30 days')
+        UNION ALL
+        SELECT deadline as d FROM education_residency WHERE status='active' AND deadline BETWEEN date('now') AND date('now', '+30 days')
+      )
+    `).first<{ count: number }>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM films`).first<{ count: number }>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM submissions`).first<{ count: number }>(),
+  ]);
+  return c.json({
+    festivals: festivals?.count ?? 0,
+    funds: funds?.count ?? 0,
+    education: education?.count ?? 0,
+    upcoming7: upcoming7?.count ?? 0,
+    upcoming30: upcoming30?.count ?? 0,
+    films: films?.count ?? 0,
+    submissions: submissions?.count ?? 0,
+  });
+});
+
+// ============================================================
 // Upcoming deadlines summary
 app.get('/api/dashboard', async (c) => {
   const result = await c.env.DB.prepare(
