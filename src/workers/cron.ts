@@ -152,7 +152,7 @@ async function sendEmail(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'IFT <noreply@ift.phamhuutri.com>',
+      from: 'IFT <noreply@phamhuutri.com>',
       to: [opts.to],
       subject: opts.subject,
       html: opts.html,
