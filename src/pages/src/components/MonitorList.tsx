@@ -371,9 +371,9 @@ const tagStyle: React.CSSProperties = {
 };
 
 const linkBadge: React.CSSProperties = {
-  background: '#ebf8ff',
-  color: '#2b6cb0',
-  border: '1px solid #bee3f8',
+  background: '#e8f0fb',
+  color: '#004aad',
+  border: '1px solid #c5d8f5',
   borderRadius: 4,
   padding: '1px 6px',
   fontSize: 11,

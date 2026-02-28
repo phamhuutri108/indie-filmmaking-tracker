@@ -15,7 +15,7 @@ function formatDate(d?: string): string {
 
 const statusColors: Record<string, string> = {
   'in-production': '#D69E2E',
-  completed: '#3182CE',
+  completed: '#004aad',
   released: '#38A169',
 };
 
@@ -46,7 +46,7 @@ function FilmCard({
       }}
       onMouseEnter={e => {
         (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
-        (e.currentTarget as HTMLDivElement).style.borderColor = '#bee3f8';
+        (e.currentTarget as HTMLDivElement).style.borderColor = '#c5d8f5';
       }}
       onMouseLeave={e => {
         (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
@@ -63,7 +63,7 @@ function FilmCard({
           )}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
             {film.genre && (
-              <span style={{ fontSize: 12, background: '#EBF8FF', color: '#2B6CB0', borderRadius: 4, padding: '2px 8px' }}>
+              <span style={{ fontSize: 12, background: '#e8f0fb', color: '#004aad', borderRadius: 4, padding: '2px 8px' }}>
                 {film.genre}
               </span>
             )}
@@ -139,7 +139,7 @@ function FilmDetail({
           {statusLabel}
         </span>
         {film.genre && (
-          <span style={{ fontSize: 12, background: '#EBF8FF', color: '#2B6CB0', borderRadius: 4, padding: '2px 8px' }}>
+          <span style={{ fontSize: 12, background: '#e8f0fb', color: '#004aad', borderRadius: 4, padding: '2px 8px' }}>
             {film.genre}
           </span>
         )}
@@ -151,7 +151,7 @@ function FilmDetail({
       </div>
 
       {film.logline && (
-        <p style={{ margin: '0 0 20px', fontSize: 14, color: '#4A5568', lineHeight: 1.6, fontStyle: 'italic', borderLeft: '3px solid #bee3f8', paddingLeft: 12 }}>
+        <p style={{ margin: '0 0 20px', fontSize: 14, color: '#4A5568', lineHeight: 1.6, fontStyle: 'italic', borderLeft: '3px solid #c5d8f5', paddingLeft: 12 }}>
           {film.logline}
         </p>
       )}
@@ -166,7 +166,7 @@ function FilmDetail({
           href={film.trailer_url}
           target="_blank"
           rel="noopener noreferrer"
-          style={{ display: 'inline-block', marginTop: 12, fontSize: 13, color: '#3182CE', textDecoration: 'none' }}
+          style={{ display: 'inline-block', marginTop: 12, fontSize: 13, color: '#004aad', textDecoration: 'none' }}
         >
           ▶ Trailer
         </a>
@@ -187,7 +187,7 @@ function FilmDetail({
         </button>
         <button
           onClick={onEdit}
-          style={{ background: '#3182CE', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+          style={{ background: '#004aad', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
         >
           {tc.edit}
         </button>
@@ -307,7 +307,7 @@ function FilmForm({
         <button
           onClick={handleSave}
           disabled={saving || !form.title.trim()}
-          style={{ background: '#3182CE', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 18px', cursor: 'pointer', fontSize: 13, fontWeight: 600, opacity: saving ? 0.7 : 1 }}
+          style={{ background: '#004aad', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 18px', cursor: 'pointer', fontSize: 13, fontWeight: 600, opacity: saving ? 0.7 : 1 }}
         >
           {saving ? '…' : tc.save}
         </button>
@@ -363,7 +363,7 @@ export function MyFilms({ t }: { t: ReturnType<typeof useI18n> }) {
         </div>
         <button
           onClick={() => setEditing('new')}
-          style={{ background: '#3182CE', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 18px', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}
+          style={{ background: '#004aad', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 18px', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}
         >
           + {tf.addFilm}
         </button>

@@ -39,7 +39,7 @@ function FundDetail({
       )}
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
-        {fund.type && <span style={badgeStyle('#3182CE')}>{fund.type}</span>}
+        {fund.type && <span style={badgeStyle('#004aad')}>{fund.type}</span>}
         {fund.focus && <span style={badgeStyle('#805ad5')}>{fund.focus}</span>}
         {fund.region_focus && <span style={badgeStyle('#38a169')}>{fund.region_focus}</span>}
       </div>
@@ -77,7 +77,7 @@ function FundDetail({
       )}
 
       {fund.website && (
-        <a href={fund.website} target="_blank" rel="noreferrer" style={linkBtn('#3182CE')}>
+        <a href={fund.website} target="_blank" rel="noreferrer" style={linkBtn('#004aad')}>
           🌐 {tc.website}
         </a>
       )}
@@ -350,7 +350,7 @@ export function FundList({ t }: { t: ReturnType<typeof useI18n> }) {
                     <div style={{ fontSize: 13, color: '#718096', marginTop: 2 }}>{f.organization}</div>
                   )}
                   <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {f.type && <span style={badgeStyle('#3182CE')}>{f.type}</span>}
+                    {f.type && <span style={badgeStyle('#004aad')}>{f.type}</span>}
                     {f.focus && <span style={badgeStyle('#805ad5')}>{f.focus}</span>}
                     {f.region_focus && <span style={badgeStyle('#38a169')}>{f.region_focus}</span>}
                     {f.max_amount && (

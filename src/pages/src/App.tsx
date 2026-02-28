@@ -28,32 +28,32 @@ export default function App() {
   ];
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8f9fa', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: '#f8f9fa', fontFamily: "'Montserrat', system-ui, -apple-system, sans-serif" }}>
       {/* Header */}
       <header
         style={{
-          background: '#1a202c',
+          background: '#004aad',
           color: '#fff',
           padding: '0 20px',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           height: 52,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+          boxShadow: '0 2px 8px rgba(0,74,173,0.3)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.02em' }}>🎬 IFT</span>
-          <span style={{ fontSize: 13, color: '#718096', borderLeft: '1px solid #2d3748', paddingLeft: 10 }}>
+          <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', borderLeft: '1px solid rgba(255,255,255,0.3)', paddingLeft: 10 }}>
             Indie Filmmaking Tracker
           </span>
         </div>
         <button
           onClick={() => setLang(lang === 'en' ? 'vi' : 'en')}
           style={{
-            background: '#2d3748',
-            color: '#e2e8f0',
-            border: '1px solid #4a5568',
+            background: 'rgba(255,255,255,0.15)',
+            color: '#fff',
+            border: '1px solid rgba(255,255,255,0.3)',
             borderRadius: 6,
             padding: '4px 12px',
             cursor: 'pointer',
@@ -68,7 +68,7 @@ export default function App() {
       {/* Nav */}
       <nav
         style={{
-          background: '#2d3748',
+          background: '#003a8c',
           padding: '0 20px',
           display: 'flex',
           gap: 2,
@@ -82,9 +82,9 @@ export default function App() {
             onClick={() => setTab(key)}
             style={{
               background: 'transparent',
-              color: tab === key ? '#fff' : '#a0aec0',
+              color: tab === key ? '#fff' : 'rgba(255,255,255,0.6)',
               border: 'none',
-              borderBottom: `2px solid ${tab === key ? '#63b3ed' : 'transparent'}`,
+              borderBottom: `2px solid ${tab === key ? '#fff' : 'transparent'}`,
               padding: '10px 16px',
               cursor: 'pointer',
               fontSize: 13,

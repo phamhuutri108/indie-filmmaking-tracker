@@ -12,7 +12,7 @@ const REF_LABELS: Record<string, string> = {
 };
 
 const REF_COLORS: Record<string, string> = {
-  festivals: '#3182CE',
+  festivals: '#004aad',
   funds_grants: '#38a169',
   education_residency: '#805ad5',
 };

@@ -24,7 +24,7 @@ function fmtFee(cents?: number): string {
 function getStatusStyle(status: string): { bg: string; color: string } {
   const map: Record<string, { bg: string; color: string }> = {
     draft:      { bg: '#F7FAFC', color: '#718096' },
-    submitted:  { bg: '#EBF8FF', color: '#2B6CB0' },
+    submitted:  { bg: '#e8f0fb', color: '#004aad' },
     accepted:   { bg: '#F0FFF4', color: '#276749' },
     rejected:   { bg: '#FFF5F5', color: '#C53030' },
     waitlisted: { bg: '#FFFFF0', color: '#744210' },
@@ -102,7 +102,7 @@ function SubmissionRow({
         <div style={{ display: 'flex', gap: 6 }}>
           <button
             onClick={onEdit}
-            style={{ background: '#EBF8FF', color: '#2B6CB0', border: '1px solid #BEE3F8', borderRadius: 5, padding: '3px 10px', cursor: 'pointer', fontSize: 12 }}
+            style={{ background: '#e8f0fb', color: '#004aad', border: '1px solid #BEE3F8', borderRadius: 5, padding: '3px 10px', cursor: 'pointer', fontSize: 12 }}
           >
             {t.common.edit}
           </button>
@@ -300,7 +300,7 @@ function SubmissionForm({
         <button
           onClick={handleSave}
           disabled={saving || !form.film_id || !form.ref_id}
-          style={{ background: '#3182CE', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 18px', cursor: 'pointer', fontSize: 13, fontWeight: 600, opacity: saving || !form.film_id || !form.ref_id ? 0.6 : 1 }}
+          style={{ background: '#004aad', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 18px', cursor: 'pointer', fontSize: 13, fontWeight: 600, opacity: saving || !form.film_id || !form.ref_id ? 0.6 : 1 }}
         >
           {saving ? '…' : tc.save}
         </button>
@@ -371,7 +371,7 @@ export function Submissions({ t }: { t: ReturnType<typeof useI18n> }) {
         </div>
         <button
           onClick={() => setEditing('new')}
-          style={{ background: '#3182CE', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 18px', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}
+          style={{ background: '#004aad', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 18px', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}
         >
           + {ts.addSubmission}
         </button>

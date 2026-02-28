@@ -43,7 +43,7 @@ function FestivalDetail({
       {/* Badges */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
         {festival.category && (
-          <span style={badgeStyle('#3182CE')}>{festival.category}</span>
+          <span style={badgeStyle('#004aad')}>{festival.category}</span>
         )}
         {festival.tier && (
           <span style={badgeStyle('#805ad5')}>{festival.tier}</span>
@@ -119,7 +119,7 @@ function FestivalDetail({
       {/* Links */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
         {festival.website && (
-          <a href={festival.website} target="_blank" rel="noreferrer" style={linkBtn('#3182CE')}>
+          <a href={festival.website} target="_blank" rel="noreferrer" style={linkBtn('#004aad')}>
             🌐 {tc.website}
           </a>
         )}
@@ -379,9 +379,9 @@ export function FestivalList({ t }: { t: ReturnType<typeof useI18n> }) {
           ))}
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <FilterPill label={t.common.all} active={!catFilter} onClick={() => setCatFilter('')} color="#3182CE" />
+          <FilterPill label={t.common.all} active={!catFilter} onClick={() => setCatFilter('')} color="#004aad" />
           {CATEGORIES.map((c) => (
-            <FilterPill key={c} label={c} active={catFilter === c} onClick={() => setCatFilter(c)} color="#3182CE" />
+            <FilterPill key={c} label={c} active={catFilter === c} onClick={() => setCatFilter(c)} color="#004aad" />
           ))}
         </div>
       </div>
@@ -419,7 +419,7 @@ export function FestivalList({ t }: { t: ReturnType<typeof useI18n> }) {
                     </span>
                   )}
                   <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {f.category && <span style={badgeStyle('#3182CE')}>{f.category}</span>}
+                    {f.category && <span style={badgeStyle('#004aad')}>{f.category}</span>}
                     {f.tier && <span style={badgeStyle('#805ad5')}>{f.tier}</span>}
                   </div>
                 </div>
@@ -463,7 +463,7 @@ function FilterPill({
   label,
   active,
   onClick,
-  color = '#3182CE',
+  color = '#004aad',
 }: {
   label: string;
   active: boolean;

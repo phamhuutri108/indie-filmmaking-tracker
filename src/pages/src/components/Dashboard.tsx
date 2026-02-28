@@ -6,7 +6,7 @@ import type { DashboardItem, Stats } from '../types';
 const API_BASE = '/api';
 
 const STAT_CARDS = [
-  { key: 'festivals' as const, icon: '🎬', color: '#3182CE', bg: '#ebf8ff' },
+  { key: 'festivals' as const, icon: '🎬', color: '#004aad', bg: '#e8f0fb' },
   { key: 'funds' as const, icon: '💰', color: '#38a169', bg: '#f0fff4' },
   { key: 'education' as const, icon: '🎓', color: '#805ad5', bg: '#faf5ff' },
   { key: 'upcoming7' as const, icon: '⚡', color: '#e53e3e', bg: '#fff5f5' },
@@ -16,7 +16,7 @@ const STAT_CARDS = [
 ];
 
 const TYPE_COLORS: Record<string, string> = {
-  festival: '#3182CE',
+  festival: '#004aad',
   fund: '#38a169',
   education: '#805ad5',
 };
@@ -167,7 +167,7 @@ export function Dashboard({ t }: { t: ReturnType<typeof useI18n> }) {
                       href={item.website}
                       target="_blank"
                       rel="noreferrer"
-                      style={{ fontSize: 12, color: '#3182CE', textDecoration: 'none' }}
+                      style={{ fontSize: 12, color: '#004aad', textDecoration: 'none' }}
                     >
                       {t.common.website} →
                     </a>

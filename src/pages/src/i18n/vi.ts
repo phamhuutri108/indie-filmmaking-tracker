@@ -204,7 +204,7 @@ export const vi = {
     },
     statusColor: {
       draft: '#718096',
-      submitted: '#3182CE',
+      submitted: '#004aad',
       accepted: '#38A169',
       rejected: '#E53E3E',
       waitlisted: '#D69E2E',
