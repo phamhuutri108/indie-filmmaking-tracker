@@ -70,6 +70,8 @@ async function runScraper(env: Env): Promise<void> {
   }
 }
 
+type AlertItem = { cmd: any; daysUntil: number };
+
 async function checkMonitorCommands(env: Env): Promise<void> {
   const commands = await env.DB.prepare(
     `SELECT mc.*,
@@ -91,6 +93,7 @@ async function checkMonitorCommands(env: Env): Promise<void> {
   ).all();
 
   const today = new Date();
+  const toAlert: AlertItem[] = [];
 
   for (const cmd of commands.results as any[]) {
     if (!cmd.deadline) continue;
@@ -113,35 +116,40 @@ async function checkMonitorCommands(env: Env): Promise<void> {
         continue;
       }
 
-      await triggerAlert(env, cmd, daysUntil);
+      toAlert.push({ cmd, daysUntil });
     }
   }
-}
 
-async function triggerAlert(env: Env, cmd: any, daysUntil: number): Promise<void> {
+  if (toAlert.length === 0) return;
+
+  // Send all alerts in a single bundled email
+  const tomorrowCount = toAlert.filter((a) => a.daysUntil === 1).length;
   const subject =
-    daysUntil === 1
-      ? `[IFT] TOMORROW: ${cmd.ref_name || cmd.target_name}`
-      : `[IFT] ${daysUntil} days left: ${cmd.ref_name || cmd.target_name}`;
+    toAlert.length === 1
+      ? (toAlert[0].daysUntil === 1
+          ? `[IFT] TOMORROW: ${toAlert[0].cmd.ref_name || toAlert[0].cmd.target_name}`
+          : `[IFT] ${toAlert[0].daysUntil} days left: ${toAlert[0].cmd.ref_name || toAlert[0].cmd.target_name}`)
+      : `[IFT] ${toAlert.length} deadline alerts${tomorrowCount > 0 ? ` (${tomorrowCount} tomorrow)` : ''}`;
 
   await sendEmail(env, {
     to: env.ALERT_EMAIL,
     subject,
-    html: buildAlertEmail(cmd, daysUntil),
+    html: buildBundledAlertEmail(toAlert),
   });
 
-  await env.DB.prepare(
-    `UPDATE monitor_commands SET last_triggered = CURRENT_TIMESTAMP WHERE id = ?`
-  )
-    .bind(cmd.id)
-    .run();
+  // Update DB for all triggered monitors
+  for (const { cmd, daysUntil } of toAlert) {
+    await env.DB.prepare(
+      `UPDATE monitor_commands SET last_triggered = CURRENT_TIMESTAMP WHERE id = ?`
+    ).bind(cmd.id).run();
 
-  await env.DB.prepare(
-    `INSERT INTO email_logs (to_email, subject, template, ref_table, ref_id, status)
-     VALUES (?, ?, 'alert', ?, ?, 'sent')`
-  )
-    .bind(env.ALERT_EMAIL, subject, cmd.ref_table, cmd.ref_id)
-    .run();
+    await env.DB.prepare(
+      `INSERT INTO email_logs (to_email, subject, template, ref_table, ref_id, status)
+       VALUES (?, ?, 'alert', ?, ?, 'sent')`
+    ).bind(env.ALERT_EMAIL, subject, cmd.ref_table, cmd.ref_id).run();
+
+    console.log(`[Cron] Alert queued: ${cmd.ref_name} (${daysUntil}d)`);
+  }
 }
 
 async function sendDailyDigest(env: Env): Promise<void> {
@@ -199,18 +207,45 @@ async function sendEmail(
   }
 }
 
-function buildAlertEmail(cmd: any, daysUntil: number): string {
-  const name = cmd.ref_name || cmd.target_name || cmd.target_url;
-  const deadline = cmd.deadline ? new Date(cmd.deadline).toDateString() : 'TBD';
+function buildBundledAlertEmail(alerts: AlertItem[]): string {
+  const rows = alerts
+    .map(({ cmd, daysUntil }) => {
+      const name = cmd.ref_name || cmd.target_name || cmd.target_url;
+      const deadline = cmd.deadline ? new Date(cmd.deadline).toDateString() : 'TBD';
+      const urgency = daysUntil === 1 ? '🔴 TOMORROW' : `🟡 ${daysUntil} days`;
+      const link = cmd.target_url
+        ? `<a href="${cmd.target_url}" style="color:#004aad;">${cmd.target_url}</a>`
+        : '—';
+      return `
+        <tr>
+          <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;font-weight:600;">${name}</td>
+          <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;">${deadline}</td>
+          <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;">${urgency}</td>
+          <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;font-size:12px;">${link}</td>
+        </tr>`;
+    })
+    .join('');
 
   return `
-    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h2 style="color: #e53e3e;">⚠️ Deadline Alert / Nhắc nhở hạn chót</h2>
-      <p><strong>${name}</strong></p>
-      <p>Deadline: <strong>${deadline}</strong> (${daysUntil === 1 ? 'TOMORROW / NGÀY MAI' : `${daysUntil} days / ${daysUntil} ngày`})</p>
-      ${cmd.target_url ? `<p><a href="${cmd.target_url}">View → ${cmd.target_url}</a></p>` : ''}
+    <div style="font-family: sans-serif; max-width: 680px; margin: 0 auto; padding: 20px;">
+      <h2 style="color: #e53e3e;">⚠️ Deadline Alerts / Nhắc nhở hạn chót</h2>
+      <p>${alerts.length} monitor(s) triggered today:</p>
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="background:#2d3748;color:white;">
+            <th style="padding:8px;text-align:left;">Name</th>
+            <th style="padding:8px;text-align:left;">Deadline</th>
+            <th style="padding:8px;text-align:left;">Urgency</th>
+            <th style="padding:8px;text-align:left;">Link</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p style="margin-top:16px;">
+        <a href="https://www.indiefilmmakingtracker.com/monitors" style="color:#004aad;">View all monitors →</a>
+      </p>
       <hr/>
-      <p style="color: #718096; font-size: 12px;">IFT — Indie Filmmaking Tracker | <a href="https://www.indiefilmmakingtracker.com">Dashboard</a></p>
+      <p style="color:#718096;font-size:12px;">IFT — Indie Filmmaking Tracker</p>
     </div>
   `;
 }

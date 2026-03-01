@@ -218,12 +218,15 @@ function AddFundModal({
 }
 
 // ─── Main FundList ────────────────────────────────────────────────────────────
+const PER_PAGE = 20;
+
 export function FundList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI18n>; isOwner: boolean; isLoggedIn: boolean }) {
   const [items, setItems] = useState<Fund[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Fund | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [watchlistIds, setWatchlistIds] = useState<Set<number>>(new Set());
@@ -273,6 +276,8 @@ export function FundList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI
 
   useEffect(() => { load(); loadWatchlist(); }, []);
 
+  useEffect(() => { setPage(1); }, [search, typeFilter]);
+
   const filtered = useMemo(() => {
     let list = items;
     if (typeFilter) list = list.filter((f) => f.type === typeFilter);
@@ -287,6 +292,9 @@ export function FundList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI
     }
     return list;
   }, [items, typeFilter, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   return (
     <div>
@@ -334,7 +342,7 @@ export function FundList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 10 }}>
-          {filtered.map((f) => (
+          {paginated.map((f) => (
             <div
               key={f.id}
               onClick={() => setSelected(f)}
@@ -386,6 +394,14 @@ export function FundList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
+          <button onClick={() => setPage((p) => p - 1)} disabled={page === 1} style={btnSecondary}>← Prev</button>
+          <span style={{ fontSize: 13, color: '#718096' }}>{page} / {totalPages} ({filtered.length})</span>
+          <button onClick={() => setPage((p) => p + 1)} disabled={page === totalPages} style={btnSecondary}>Next →</button>
         </div>
       )}
 

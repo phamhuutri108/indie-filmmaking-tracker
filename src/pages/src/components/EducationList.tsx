@@ -234,11 +234,14 @@ function AddEducationModal({
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
+const PER_PAGE = 20;
+
 export function EducationList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI18n>; isOwner: boolean; isLoggedIn: boolean }) {
   const [items, setItems] = useState<Education[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Education | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [watchlistIds, setWatchlistIds] = useState<Set<number>>(new Set());
@@ -280,6 +283,8 @@ export function EducationList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof
 
   useEffect(() => { load(); loadWatchlist(); }, []);
 
+  useEffect(() => { setPage(1); }, [search, typeFilter]);
+
   const filtered = useMemo(() => {
     let list = items;
     if (typeFilter) list = list.filter((e) => e.type === typeFilter);
@@ -294,6 +299,9 @@ export function EducationList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof
     }
     return list;
   }, [items, typeFilter, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   return (
     <div>
@@ -336,7 +344,7 @@ export function EducationList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 10 }}>
-          {filtered.map((e) => (
+          {paginated.map((e) => (
             <div
               key={e.id}
               onClick={() => setSelected(e)}
@@ -379,6 +387,14 @@ export function EducationList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
+          <button onClick={() => setPage((p) => p - 1)} disabled={page === 1} style={btnSecondary}>← Prev</button>
+          <span style={{ fontSize: 13, color: '#718096' }}>{page} / {totalPages} ({filtered.length})</span>
+          <button onClick={() => setPage((p) => p + 1)} disabled={page === totalPages} style={btnSecondary}>Next →</button>
         </div>
       )}
 

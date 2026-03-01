@@ -288,12 +288,15 @@ function AddFestivalModal({
 }
 
 // ─── Main FestivalList ────────────────────────────────────────────────────────
+const PER_PAGE = 20;
+
 export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI18n>; isOwner: boolean; isLoggedIn: boolean }) {
   const [items, setItems] = useState<Festival[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('');
   const [tierFilter, setTierFilter] = useState('');
+  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Festival | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [watchlistIds, setWatchlistIds] = useState<Set<number>>(new Set());
@@ -335,6 +338,9 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
 
   useEffect(() => { load(); loadWatchlist(); }, []);
 
+  // Reset to page 1 whenever filters change
+  useEffect(() => { setPage(1); }, [search, catFilter, tierFilter]);
+
   const filtered = useMemo(() => {
     let list = items;
     if (tierFilter) list = list.filter((f) => f.tier === tierFilter);
@@ -350,6 +356,9 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
     }
     return list;
   }, [items, catFilter, tierFilter, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   return (
     <div>
@@ -405,7 +414,7 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 10 }}>
-          {filtered.map((f) => (
+          {paginated.map((f) => (
             <div
               key={f.id}
               onClick={() => setSelected(f)}
@@ -457,6 +466,15 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 16 }}>
+          <button onClick={() => setPage((p) => p - 1)} disabled={page === 1} style={btnSecondary}>← Prev</button>
+          <span style={{ fontSize: 13, color: '#718096' }}>{page} / {totalPages} ({filtered.length})</span>
+          <button onClick={() => setPage((p) => p + 1)} disabled={page === totalPages} style={btnSecondary}>Next →</button>
         </div>
       )}
 
