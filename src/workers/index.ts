@@ -151,7 +151,7 @@ app.get('/api/auth/callback', async (c) => {
               <div style="font-family:'Segoe UI',sans-serif;max-width:480px;margin:0 auto;padding:40px 24px">
                 <h2 style="color:#1a202c;margin:0 0 16px">Xin chào ${name},</h2>
                 <p style="color:#4a5568;line-height:1.7;margin:0 0 12px">
-                  Chúng tôi đã nhận được yêu cầu đăng ký tài khoản <strong>Indie Filmmaking Tracker</strong> của bạn.
+                  Yêu cầu đăng ký tài khoản <strong>Indie Filmmaking Tracker</strong> của bạn đã được ghi nhận.
                 </p>
                 <p style="color:#4a5568;line-height:1.7;margin:0 0 28px">
                   Admin sẽ xem xét và duyệt trong thời gian sớm nhất. Bạn sẽ nhận được email thông báo ngay khi tài khoản được kích hoạt.
