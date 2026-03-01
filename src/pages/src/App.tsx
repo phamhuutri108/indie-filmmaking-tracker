@@ -25,7 +25,7 @@ function tabFromPath(): Tab {
 }
 
 export default function App() {
-  const [lang, setLang] = useState<Lang>('en');
+  const [lang, setLang] = useState<Lang>('vi');
   const [tab, setTab] = useState<Tab>(tabFromPath);
   const [showUsers, setShowUsers] = useState(false);
   const [showSignIn, setShowSignIn] = useState(() => {
