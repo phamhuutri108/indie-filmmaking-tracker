@@ -135,6 +135,34 @@ app.get('/api/auth/callback', async (c) => {
             `,
           }),
         });
+
+        // Confirm to new user that request was received
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${c.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'Indie Filmmaking Tracker <noreply@indiefilmmakingtracker.com>',
+            to: [email],
+            subject: '[IFT] Yêu cầu đăng ký của bạn đã được gửi đi',
+            html: `
+              <div style="font-family:'Segoe UI',sans-serif;max-width:480px;margin:0 auto;padding:40px 24px">
+                <h2 style="color:#1a202c;margin:0 0 16px">Xin chào ${name},</h2>
+                <p style="color:#4a5568;line-height:1.7;margin:0 0 12px">
+                  Chúng tôi đã nhận được yêu cầu đăng ký tài khoản <strong>Indie Filmmaking Tracker</strong> của bạn.
+                </p>
+                <p style="color:#4a5568;line-height:1.7;margin:0 0 28px">
+                  Admin sẽ xem xét và duyệt trong thời gian sớm nhất. Bạn sẽ nhận được email thông báo ngay khi tài khoản được kích hoạt.
+                </p>
+                <p style="color:#a0aec0;font-size:12px;margin:32px 0 0;line-height:1.6">
+                  Indie Filmmaking Tracker — <a href="${c.env.APP_URL}" style="color:#a0aec0">${c.env.APP_URL}</a>
+                </p>
+              </div>
+            `,
+          }),
+        });
       }
     }
   } else {
