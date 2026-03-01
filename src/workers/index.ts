@@ -563,23 +563,7 @@ app.get('/api/monitors', async (c) => {
   if (!user) return c.json({ data: [] });
 
   const result = await c.env.DB.prepare(
-    `SELECT mc.*,
-            CASE mc.ref_table
-              WHEN 'festivals' THEN f.name
-              WHEN 'funds_grants' THEN fg.name
-              WHEN 'education_residency' THEN er.name
-            END as ref_name,
-            CASE mc.ref_table
-              WHEN 'festivals' THEN f.regular_deadline
-              WHEN 'funds_grants' THEN fg.deadline
-              WHEN 'education_residency' THEN er.deadline
-            END as deadline
-     FROM monitor_commands mc
-     LEFT JOIN festivals f ON mc.ref_table = 'festivals' AND mc.ref_id = f.id
-     LEFT JOIN funds_grants fg ON mc.ref_table = 'funds_grants' AND mc.ref_id = fg.id
-     LEFT JOIN education_residency er ON mc.ref_table = 'education_residency' AND mc.ref_id = er.id
-     WHERE mc.user_id = ?
-     ORDER BY mc.created_at DESC`
+    `SELECT * FROM v_monitor_details WHERE user_id = ? ORDER BY created_at DESC`
   ).bind(user.sub).all();
   return c.json({ data: result.results });
 });
@@ -745,33 +729,7 @@ app.get('/api/watchlist', async (c) => {
   if (!user) return c.json({ data: [] });
 
   const result = await c.env.DB.prepare(
-    `SELECT w.*,
-            CASE w.ref_table
-              WHEN 'festivals' THEN f.name
-              WHEN 'funds_grants' THEN fg.name
-              WHEN 'education_residency' THEN er.name
-            END as ref_name,
-            CASE w.ref_table
-              WHEN 'festivals' THEN f.regular_deadline
-              WHEN 'funds_grants' THEN fg.deadline
-              WHEN 'education_residency' THEN er.deadline
-            END as deadline,
-            CASE w.ref_table
-              WHEN 'festivals' THEN f.website
-              WHEN 'funds_grants' THEN fg.website
-              WHEN 'education_residency' THEN er.website
-            END as website,
-            CASE w.ref_table
-              WHEN 'festivals' THEN f.country
-              WHEN 'funds_grants' THEN fg.country
-              WHEN 'education_residency' THEN er.country
-            END as country
-     FROM watchlist w
-     LEFT JOIN festivals f ON w.ref_table = 'festivals' AND w.ref_id = f.id
-     LEFT JOIN funds_grants fg ON w.ref_table = 'funds_grants' AND w.ref_id = fg.id
-     LEFT JOIN education_residency er ON w.ref_table = 'education_residency' AND w.ref_id = er.id
-     WHERE w.user_id = ?
-     ORDER BY deadline ASC`
+    `SELECT * FROM v_watchlist_details WHERE user_id = ? ORDER BY deadline ASC`
   ).bind(user.sub).all();
   return c.json({ data: result.results });
 });

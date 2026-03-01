@@ -3,6 +3,7 @@
 
 import { scrapeAsianFilmFestivals, scrapeCineuropaRss } from './scraper';
 import { scrapeFunds } from './fund-scraper';
+import { buildBundledAlertEmail, buildDigestEmail, buildErrorAlertEmail, type AlertItem, type DigestItem } from './email-templates';
 
 export interface Env {
   DB: D1Database;
@@ -32,6 +33,19 @@ export async function handleCron(env: Env): Promise<void> {
     console.error('[IFT Cron] Failed tasks:', failed.map(f => f.task));
     await sendErrorAlert(env, failed);
   }
+
+  // Cleanup old email_logs (keep 90 days)
+  const { meta } = await env.DB.prepare(
+    `DELETE FROM email_logs WHERE created_at < datetime('now', '-90 days')`
+  ).run();
+  if (meta.changes > 0) {
+    console.log(`[IFT Cron] Cleaned up ${meta.changes} old email_log rows.`);
+  }
+
+  // Cleanup old rate limit records
+  await env.DB.prepare(
+    `DELETE FROM auth_rate_limits WHERE blocked_until < datetime('now') OR (blocked_until IS NULL AND first_attempt_at < datetime('now', '-1 day'))`
+  ).run();
 
   console.log('[IFT Cron] Done.');
 }
@@ -69,8 +83,6 @@ async function runScraper(env: Env): Promise<void> {
     console.error('[Cron] Scraper failed:', err);
   }
 }
-
-type AlertItem = { cmd: any; daysUntil: number };
 
 async function checkMonitorCommands(env: Env): Promise<void> {
   const commands = await env.DB.prepare(
@@ -153,6 +165,10 @@ async function checkMonitorCommands(env: Env): Promise<void> {
 }
 
 async function sendDailyDigest(env: Env): Promise<void> {
+  const dayOfWeek = new Date().getDay();
+  if (dayOfWeek !== 1) return; // Monday digest only
+
+  // Owner digest — global upcoming deadlines
   const upcoming = await env.DB.prepare(
     `SELECT 'festival' as type, name, regular_deadline as deadline, website
      FROM festivals WHERE regular_deadline >= date('now') AND regular_deadline <= date('now', '+30 days') AND status = 'active'
@@ -166,16 +182,51 @@ async function sendDailyDigest(env: Env): Promise<void> {
      LIMIT 20`
   ).all();
 
-  if (upcoming.results.length === 0) return;
+  if (upcoming.results.length > 0) {
+    await sendEmail(env, {
+      to: env.ALERT_EMAIL,
+      subject: '[IFT] Weekly Digest — Upcoming Deadlines',
+      html: buildDigestEmail(upcoming.results as DigestItem[]),
+    });
+  }
 
-  const dayOfWeek = new Date().getDay();
-  if (dayOfWeek !== 1) return; // Monday digest only
+  // Member digests — personalized by watchlist
+  const members = await env.DB.prepare(
+    `SELECT id, name, email FROM users WHERE role = 'member' AND status = 'approved' AND email IS NOT NULL`
+  ).all<{ id: number; name: string; email: string }>();
 
-  await sendEmail(env, {
-    to: env.ALERT_EMAIL,
-    subject: '[IFT] Weekly Digest — Upcoming Deadlines',
-    html: buildDigestEmail(upcoming.results as any[]),
-  });
+  for (const member of members.results) {
+    const watchlistItems = await env.DB.prepare(
+      `SELECT
+         CASE w.ref_table
+           WHEN 'festivals'           THEN 'festival'
+           WHEN 'funds_grants'        THEN 'fund'
+           WHEN 'education_residency' THEN 'education'
+         END as type,
+         COALESCE(f.name, fg.name, er.name) as name,
+         COALESCE(f.regular_deadline, fg.deadline, er.deadline) as deadline,
+         COALESCE(f.website, fg.website, er.website) as website
+       FROM watchlist w
+       LEFT JOIN festivals f          ON w.ref_table = 'festivals'          AND w.ref_id = f.id
+       LEFT JOIN funds_grants fg      ON w.ref_table = 'funds_grants'       AND w.ref_id = fg.id
+       LEFT JOIN education_residency er ON w.ref_table = 'education_residency' AND w.ref_id = er.id
+       WHERE w.user_id = ?
+         AND COALESCE(f.regular_deadline, fg.deadline, er.deadline) >= date('now')
+         AND COALESCE(f.regular_deadline, fg.deadline, er.deadline) <= date('now', '+30 days')
+       ORDER BY deadline ASC
+       LIMIT 20`
+    ).bind(member.id).all<DigestItem>();
+
+    if (watchlistItems.results.length === 0) continue;
+
+    await sendEmail(env, {
+      to: member.email,
+      subject: '[IFT] Your Weekly Watchlist Digest',
+      html: buildDigestEmail(watchlistItems.results, member.name),
+    });
+
+    console.log(`[Cron] Member digest sent to ${member.email} (${watchlistItems.results.length} items)`);
+  }
 }
 
 async function sendEmail(
@@ -207,98 +258,10 @@ async function sendEmail(
   }
 }
 
-function buildBundledAlertEmail(alerts: AlertItem[]): string {
-  const rows = alerts
-    .map(({ cmd, daysUntil }) => {
-      const name = cmd.ref_name || cmd.target_name || cmd.target_url;
-      const deadline = cmd.deadline ? new Date(cmd.deadline).toDateString() : 'TBD';
-      const urgency = daysUntil === 1 ? '🔴 TOMORROW' : `🟡 ${daysUntil} days`;
-      const link = cmd.target_url
-        ? `<a href="${cmd.target_url}" style="color:#004aad;">${cmd.target_url}</a>`
-        : '—';
-      return `
-        <tr>
-          <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;font-weight:600;">${name}</td>
-          <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;">${deadline}</td>
-          <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;">${urgency}</td>
-          <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;font-size:12px;">${link}</td>
-        </tr>`;
-    })
-    .join('');
-
-  return `
-    <div style="font-family: sans-serif; max-width: 680px; margin: 0 auto; padding: 20px;">
-      <h2 style="color: #e53e3e;">⚠️ Deadline Alerts / Nhắc nhở hạn chót</h2>
-      <p>${alerts.length} monitor(s) triggered today:</p>
-      <table style="width:100%;border-collapse:collapse;">
-        <thead>
-          <tr style="background:#2d3748;color:white;">
-            <th style="padding:8px;text-align:left;">Name</th>
-            <th style="padding:8px;text-align:left;">Deadline</th>
-            <th style="padding:8px;text-align:left;">Urgency</th>
-            <th style="padding:8px;text-align:left;">Link</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <p style="margin-top:16px;">
-        <a href="https://www.indiefilmmakingtracker.com/monitors" style="color:#004aad;">View all monitors →</a>
-      </p>
-      <hr/>
-      <p style="color:#718096;font-size:12px;">IFT — Indie Filmmaking Tracker</p>
-    </div>
-  `;
-}
-
-function buildDigestEmail(items: any[]): string {
-  const rows = items
-    .map(
-      (i) => `
-      <tr>
-        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${i.type}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;"><a href="${i.website}">${i.name}</a></td>
-        <td style="padding: 8px; border-bottom: 1px solid #e2e8f0;">${i.deadline}</td>
-      </tr>`
-    )
-    .join('');
-
-  return `
-    <div style="font-family: sans-serif; max-width: 700px; margin: 0 auto; padding: 20px;">
-      <h2>🎬 IFT Weekly Digest</h2>
-      <p>Upcoming deadlines in the next 30 days / Hạn chót trong 30 ngày tới:</p>
-      <table style="width: 100%; border-collapse: collapse;">
-        <thead>
-          <tr style="background: #2d3748; color: white;">
-            <th style="padding: 8px; text-align: left;">Type</th>
-            <th style="padding: 8px; text-align: left;">Name</th>
-            <th style="padding: 8px; text-align: left;">Deadline</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <hr/>
-      <p style="color: #718096; font-size: 12px;">IFT — Indie Filmmaking Tracker</p>
-    </div>
-  `;
-}
-
 async function sendErrorAlert(env: Env, failed: Array<{ task: string; reason: unknown }>): Promise<void> {
-  const rows = failed
-    .map(f => `<li><strong>${f.task}</strong>: ${String(f.reason)}</li>`)
-    .join('');
-
   await sendEmail(env, {
     to: env.ALERT_EMAIL,
     subject: `[IFT] Cron failure — ${failed.length} task(s) failed`,
-    html: `
-      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #e53e3e;">⚠️ IFT Cron Job Failed</h2>
-        <p>${failed.length} task(s) failed during the daily run at ${new Date().toISOString()}:</p>
-        <ul>${rows}</ul>
-        <p>Check Cloudflare Workers logs for details.</p>
-        <hr/>
-        <p style="color: #718096; font-size: 12px;">IFT — Indie Filmmaking Tracker</p>
-      </div>
-    `,
+    html: buildErrorAlertEmail(failed),
   });
 }
