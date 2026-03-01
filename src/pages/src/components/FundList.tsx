@@ -323,16 +323,16 @@ export function FundList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI
           <h2 style={{ margin: '0 0 4px', fontSize: 22, color: '#1a202c' }}>{t.funds.title}</h2>
           <p style={{ margin: 0, color: '#718096', fontSize: 14 }}>{t.funds.subtitle}</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={refresh} disabled={refreshing} style={btnSecondary}>
-            🔄 {refreshing ? t.funds.refreshing : t.funds.refresh}
-          </button>
-          {isOwner && (
+        {isOwner && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={refresh} disabled={refreshing} style={btnSecondary}>
+              🔄 {refreshing ? t.funds.refreshing : t.funds.refresh}
+            </button>
             <button onClick={() => setShowAdd(true)} style={btnPrimary}>
               + {t.funds.addFund}
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
