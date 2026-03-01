@@ -186,6 +186,38 @@ app.get('/api/auth/me', async (c) => {
   return user ? c.json(user) : c.json({ error: 'Not found' }, 404);
 });
 
+async function sendApprovalEmail(resendKey: string, appUrl: string, user: { name: string; email: string }) {
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${resendKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: 'Indie Filmmaking Tracker <noreply@indiefilmmakingtracker.com>',
+      to: [user.email],
+      subject: '[IFT] Tài khoản của bạn đã được duyệt',
+      html: `
+        <div style="font-family:'Segoe UI',sans-serif;max-width:480px;margin:0 auto;padding:40px 24px">
+          <h2 style="color:#1a202c;margin:0 0 16px">Xin chào ${user.name},</h2>
+          <p style="color:#4a5568;line-height:1.7;margin:0 0 12px">
+            Tài khoản của bạn tại <strong>Indie Filmmaking Tracker</strong> đã được duyệt.
+          </p>
+          <p style="color:#4a5568;line-height:1.7;margin:0 0 28px">
+            Mời bạn đăng nhập lại để bắt đầu sử dụng:
+          </p>
+          <a href="${appUrl}" style="display:inline-block;background:#004aad;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">
+            Đăng nhập ngay →
+          </a>
+          <p style="color:#a0aec0;font-size:12px;margin:32px 0 0;line-height:1.6">
+            Indie Filmmaking Tracker — <a href="${appUrl}" style="color:#a0aec0">${appUrl}</a>
+          </p>
+        </div>
+      `,
+    }),
+  });
+}
+
 // Approve pending user (owner clicks email link)
 app.get('/api/auth/approve/:id', async (c) => {
   const { token } = c.req.query();
@@ -198,6 +230,10 @@ app.get('/api/auth/approve/:id', async (c) => {
 
   const user = await c.env.DB.prepare(`SELECT name, email FROM users WHERE id = ?`).bind(userId).first<{ name: string; email: string }>();
   await c.env.DB.prepare(`UPDATE users SET status = 'approved' WHERE id = ?`).bind(userId).run();
+
+  if (user && c.env.RESEND_API_KEY) {
+    await sendApprovalEmail(c.env.RESEND_API_KEY, c.env.APP_URL, user);
+  }
 
   return c.html(`
     <html><head><meta charset="utf-8"></head>
@@ -239,6 +275,10 @@ app.patch('/api/auth/users/:id', async (c) => {
   const body = await c.req.json<{ status?: string }>();
   if (body.status) {
     await c.env.DB.prepare(`UPDATE users SET status = ? WHERE id = ?`).bind(body.status, userId).run();
+    if (body.status === 'approved' && c.env.RESEND_API_KEY) {
+      const user = await c.env.DB.prepare(`SELECT name, email FROM users WHERE id = ?`).bind(userId).first<{ name: string; email: string }>();
+      if (user) await sendApprovalEmail(c.env.RESEND_API_KEY, c.env.APP_URL, user);
+    }
   }
   return c.json({ ok: true });
 });
