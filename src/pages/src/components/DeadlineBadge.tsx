@@ -16,9 +16,11 @@ export function DeadlineBadge({
 }) {
   const days = daysUntil(deadline);
   const color =
-    days <= 0 ? '#e53e3e' : days <= 7 ? '#dd6b20' : days <= 30 ? '#d69e2e' : '#38a169';
+    days < 0 ? '#a0aec0' : days === 0 ? '#e53e3e' : days <= 7 ? '#dd6b20' : days <= 30 ? '#d69e2e' : '#38a169';
   const label =
-    days <= 0
+    days < 0
+      ? t.common.expired
+      : days === 0
       ? t.common.today
       : days === 1
       ? t.common.tomorrow

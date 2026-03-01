@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useI18n } from '../i18n';
 import { apiFetch } from '../apiFetch';
-import { DeadlineBadge } from './DeadlineBadge';
+import { DeadlineBadge, daysUntil } from './DeadlineBadge';
 import { Modal, inputStyle, labelStyle, formRowStyle, formGridStyle } from './Modal';
 import type { Festival } from '../types';
 
@@ -25,15 +25,30 @@ function FestivalDetail({
   festival,
   t,
   onClose,
+  isLoggedIn,
+  inWatchlist,
+  onToggleStar,
 }: {
   festival: Festival;
   t: ReturnType<typeof useI18n>;
   onClose: () => void;
+  isLoggedIn: boolean;
+  inWatchlist: boolean;
+  onToggleStar: () => void;
 }) {
   const tf = t.festivals;
   const tc = t.common;
+  const starAction = isLoggedIn ? (
+    <button
+      onClick={onToggleStar}
+      title={inWatchlist ? 'Remove from watchlist' : 'Add to watchlist'}
+      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, padding: '0 2px', color: inWatchlist ? '#d69e2e' : '#cbd5e0', lineHeight: 1 }}
+    >
+      {inWatchlist ? '⭐' : '☆'}
+    </button>
+  ) : undefined;
   return (
-    <Modal isOpen title={festival.name} onClose={onClose} maxWidth={660}>
+    <Modal isOpen title={festival.name} onClose={onClose} maxWidth={660} action={starAction}>
       {/* Country / city */}
       {(festival.country || festival.city) && (
         <p style={{ margin: '0 0 16px', color: '#718096', fontSize: 14 }}>
@@ -354,7 +369,13 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
           f.city?.toLowerCase().includes(q)
       );
     }
-    return list;
+    // Expired items sink to the bottom
+    return [...list].sort((a, b) => {
+      const aExp = a.regular_deadline ? daysUntil(a.regular_deadline) < 0 : false;
+      const bExp = b.regular_deadline ? daysUntil(b.regular_deadline) < 0 : false;
+      if (aExp === bExp) return 0;
+      return aExp ? 1 : -1;
+    });
   }, [items, catFilter, tierFilter, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
@@ -479,7 +500,14 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
       )}
 
       {selected && (
-        <FestivalDetail festival={selected} t={t} onClose={() => setSelected(null)} />
+        <FestivalDetail
+          festival={selected}
+          t={t}
+          onClose={() => setSelected(null)}
+          isLoggedIn={isLoggedIn}
+          inWatchlist={watchlistIds.has(selected.id)}
+          onToggleStar={() => toggleStar({ stopPropagation: () => {} } as React.MouseEvent, selected.id)}
+        />
       )}
       {showAdd && (
         <AddFestivalModal t={t} onClose={() => setShowAdd(false)} onSaved={load} />

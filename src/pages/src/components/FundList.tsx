@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useI18n } from '../i18n';
 import { apiFetch } from '../apiFetch';
-import { DeadlineBadge } from './DeadlineBadge';
+import { DeadlineBadge, daysUntil } from './DeadlineBadge';
 import { Modal, inputStyle, labelStyle, formRowStyle, formGridStyle } from './Modal';
 import type { Fund } from '../types';
 
@@ -26,15 +26,30 @@ function FundDetail({
   fund,
   t,
   onClose,
+  isLoggedIn,
+  inWatchlist,
+  onToggleStar,
 }: {
   fund: Fund;
   t: ReturnType<typeof useI18n>;
   onClose: () => void;
+  isLoggedIn: boolean;
+  inWatchlist: boolean;
+  onToggleStar: () => void;
 }) {
   const tf = t.funds;
   const tc = t.common;
+  const starAction = isLoggedIn ? (
+    <button
+      onClick={onToggleStar}
+      title={inWatchlist ? 'Remove from watchlist' : 'Add to watchlist'}
+      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 22, padding: '0 2px', color: inWatchlist ? '#d69e2e' : '#cbd5e0', lineHeight: 1 }}
+    >
+      {inWatchlist ? '⭐' : '☆'}
+    </button>
+  ) : undefined;
   return (
-    <Modal isOpen title={fund.name} onClose={onClose} maxWidth={600}>
+    <Modal isOpen title={fund.name} onClose={onClose} maxWidth={600} action={starAction}>
       {fund.organization && (
         <p style={{ margin: '0 0 14px', color: '#718096', fontSize: 14 }}>🏛 {fund.organization}</p>
       )}
@@ -290,7 +305,12 @@ export function FundList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI
           f.country?.toLowerCase().includes(q)
       );
     }
-    return list;
+    return [...list].sort((a, b) => {
+      const aExp = a.deadline ? daysUntil(a.deadline) < 0 : false;
+      const bExp = b.deadline ? daysUntil(b.deadline) < 0 : false;
+      if (aExp === bExp) return 0;
+      return aExp ? 1 : -1;
+    });
   }, [items, typeFilter, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
@@ -405,7 +425,16 @@ export function FundList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI
         </div>
       )}
 
-      {selected && <FundDetail fund={selected} t={t} onClose={() => setSelected(null)} />}
+      {selected && (
+        <FundDetail
+          fund={selected}
+          t={t}
+          onClose={() => setSelected(null)}
+          isLoggedIn={isLoggedIn}
+          inWatchlist={watchlistIds.has(selected.id)}
+          onToggleStar={() => toggleStar({ stopPropagation: () => {} } as React.MouseEvent, selected.id)}
+        />
+      )}
       {showAdd && <AddFundModal t={t} onClose={() => setShowAdd(false)} onSaved={load} />}
     </div>
   );

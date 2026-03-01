@@ -6,9 +6,10 @@ interface ModalProps {
   title: string;
   children: ReactNode;
   maxWidth?: number;
+  action?: ReactNode;
 }
 
-export function Modal({ isOpen, onClose, title, children, maxWidth = 620 }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, maxWidth = 620, action }: ModalProps) {
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -50,7 +51,10 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = 620 }: Moda
             borderBottom: '1px solid #e2e8f0',
           }}
         >
-          <h3 style={{ margin: 0, fontSize: 18, color: '#1a202c' }}>{title}</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h3 style={{ margin: 0, fontSize: 18, color: '#1a202c' }}>{title}</h3>
+            {action}
+          </div>
           <button
             onClick={onClose}
             style={{

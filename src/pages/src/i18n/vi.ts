@@ -247,6 +247,7 @@ export const vi = {
     website: 'Website',
     deadline: 'Hạn chót',
     daysLeft: 'ngày còn lại',
+    expired: 'HẾT HẠN',
     tomorrow: 'NGÀY MAI',
     today: 'HÔM NAY',
     loading: 'Đang tải...',

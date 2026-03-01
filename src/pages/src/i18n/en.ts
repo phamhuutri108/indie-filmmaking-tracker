@@ -247,6 +247,7 @@ export const en = {
     website: 'Website',
     deadline: 'Deadline',
     daysLeft: 'days left',
+    expired: 'EXPIRED',
     tomorrow: 'TOMORROW',
     today: 'TODAY',
     loading: 'Loading...',
