@@ -1,5 +1,5 @@
 # Indie Filmmaking Tracker (IFT)
-**URL:** ift.phamhuutri.com  
+**URL:** indiefilmmakingtracker.com
 **Stack:** Cloudflare Pages + Workers + D1 + Cron Triggers  
 **Email:** Resend.com  
 **Language:** Bilingual VI/EN  

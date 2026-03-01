@@ -125,7 +125,7 @@ app.get('/api/auth/callback', async (c) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: 'IFT <noreply@ift.phamhuutri.com>',
+            from: 'IFT <noreply@indiefilmmakingtracker.com>',
             to: [c.env.ALERT_EMAIL],
             subject: `[IFT] New member request: ${name} (${email})`,
             html: `
@@ -269,8 +269,8 @@ app.post('/api/feedback', async (c) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'IFT Feedback <noreply@ift.phamhuutri.com>',
-        to: ['support@phamhuutri.com'],
+        from: 'IFT Feedback <noreply@indiefilmmakingtracker.com>',
+        to: ['support@indiefilmmakingtracker.com'],
         reply_to: email,
         subject: `[IFT Feedback] ${name}`,
         html: `<p><strong>Tên:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><p><strong>Lời nhắn:</strong></p><p style="white-space:pre-wrap">${message}</p>`,

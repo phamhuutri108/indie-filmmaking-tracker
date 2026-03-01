@@ -163,7 +163,7 @@ async function sendEmail(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'IFT <noreply@ift.phamhuutri.com>',
+      from: 'IFT <noreply@indiefilmmakingtracker.com>',
       to: [opts.to],
       subject: opts.subject,
       html: opts.html,
@@ -187,7 +187,7 @@ function buildAlertEmail(cmd: any, daysUntil: number): string {
       <p>Deadline: <strong>${deadline}</strong> (${daysUntil === 1 ? 'TOMORROW / NGÀY MAI' : `${daysUntil} days / ${daysUntil} ngày`})</p>
       ${cmd.target_url ? `<p><a href="${cmd.target_url}">View → ${cmd.target_url}</a></p>` : ''}
       <hr/>
-      <p style="color: #718096; font-size: 12px;">IFT — Indie Filmmaking Tracker | <a href="https://ift.phamhuutri.com">Dashboard</a></p>
+      <p style="color: #718096; font-size: 12px;">IFT — Indie Filmmaking Tracker | <a href="https://indiefilmmakingtracker.com">Dashboard</a></p>
     </div>
   `;
 }

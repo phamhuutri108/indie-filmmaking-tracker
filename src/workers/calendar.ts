@@ -82,7 +82,7 @@ export function dbRowsToEvents(
   return rows
     .filter((r) => r.deadline)
     .map((r) => ({
-      uid: `${r.type}-${r.id}@ift.phamhuutri.com`,
+      uid: `${r.type}-${r.id}@indiefilmmakingtracker.com`,
       summary: `[${r.type.toUpperCase()}] ${r.name} — Deadline`,
       description: `Deadline for ${r.name}`,
       dtstart: r.deadline,

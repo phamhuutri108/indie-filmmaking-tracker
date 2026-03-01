@@ -2,7 +2,7 @@
 
 > Công cụ theo dõi cơ hội cho nhà làm phim độc lập — liên hoan phim, quỹ tài trợ, chương trình học thuật, và quản lý submission cá nhân.
 
-**Live:** [ift.phamhuutri.com](https://ift.phamhuutri.com)
+**Live:** [indiefilmmakingtracker.com](https://indiefilmmakingtracker.com)
 
 ---
 

@@ -16,4 +16,4 @@ crons = ["0 8 * * *"]
 
 [vars]
 ENVIRONMENT = "production"
-APP_URL = "https://ift.phamhuutri.com"
+APP_URL = "https://indiefilmmakingtracker.com"
