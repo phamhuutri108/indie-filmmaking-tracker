@@ -190,10 +190,43 @@ app.get('/api/auth/callback', async (c) => {
 
 // Owner password login
 app.post('/api/auth/owner', async (c) => {
+  const ip = c.req.header('CF-Connecting-IP') ?? c.req.header('X-Forwarded-For') ?? 'unknown';
+  const now = new Date();
+
+  // Check rate limit
+  const rl = await c.env.DB.prepare(
+    `SELECT attempts, blocked_until FROM auth_rate_limits WHERE ip = ?`
+  ).bind(ip).first<{ attempts: number; blocked_until: string | null }>();
+
+  if (rl?.blocked_until && new Date(rl.blocked_until) > now) {
+    const retryAfter = Math.ceil((new Date(rl.blocked_until).getTime() - now.getTime()) / 1000);
+    return c.json({ error: 'Too many attempts. Try again later.' }, 429, {
+      'Retry-After': String(retryAfter),
+    });
+  }
+
   const { password } = await c.req.json<{ password: string }>();
   if (password !== c.env.OWNER_PASSWORD) {
-    return c.json({ error: 'Invalid password' }, 401);
+    // Increment failed attempts; block after 5 within 15 minutes
+    const attempts = (rl?.attempts ?? 0) + 1;
+    const blockedUntil = attempts >= 5 ? new Date(now.getTime() + 15 * 60 * 1000).toISOString() : null;
+    await c.env.DB.prepare(
+      `INSERT INTO auth_rate_limits (ip, attempts, first_attempt_at, blocked_until)
+       VALUES (?, ?, CURRENT_TIMESTAMP, ?)
+       ON CONFLICT(ip) DO UPDATE SET
+         attempts = excluded.attempts,
+         blocked_until = excluded.blocked_until`
+    ).bind(ip, attempts, blockedUntil).run();
+
+    return c.json(
+      { error: 'Invalid password', attemptsLeft: Math.max(0, 5 - attempts) },
+      401,
+    );
   }
+
+  // Success — clear rate limit
+  await c.env.DB.prepare(`DELETE FROM auth_rate_limits WHERE ip = ?`).bind(ip).run();
+
   await c.env.DB.prepare(
     `INSERT OR IGNORE INTO users (id, email, name, role, status) VALUES (1, 'owner@ift.internal', 'Tri Pham', 'owner', 'approved')`
   ).run();
@@ -370,13 +403,18 @@ app.get('/api/cron/run', async (c) => {
 // MODULE 1: Festivals (global — no user scoping)
 // ============================================================
 app.get('/api/festivals', async (c) => {
-  const { category, tier, status = 'active', limit = '20', offset = '0' } = c.req.query();
+  const { category, tier, status = 'active', limit = '500', offset = '0', search } = c.req.query();
 
   let query = `SELECT * FROM festivals WHERE status = ?`;
   const params: unknown[] = [status];
 
   if (category) { query += ` AND category = ?`; params.push(category); }
   if (tier)     { query += ` AND tier = ?`;     params.push(tier); }
+  if (search) {
+    query += ` AND (name LIKE ? OR country LIKE ? OR city LIKE ?)`;
+    const like = `%${search}%`;
+    params.push(like, like, like);
+  }
 
   query += ` ORDER BY regular_deadline ASC LIMIT ? OFFSET ?`;
   params.push(Number(limit), Number(offset));
@@ -419,7 +457,7 @@ app.post('/api/festivals', async (c) => {
 // MODULE 2: Funds & Grants (global)
 // ============================================================
 app.get('/api/funds', async (c) => {
-  const { type, focus, region_focus, status = 'active' } = c.req.query();
+  const { type, focus, region_focus, status = 'active', search } = c.req.query();
 
   let query = `SELECT * FROM funds_grants WHERE status = ?`;
   const params: unknown[] = [status];
@@ -427,8 +465,13 @@ app.get('/api/funds', async (c) => {
   if (type)         { query += ` AND type = ?`;         params.push(type); }
   if (focus)        { query += ` AND focus = ?`;        params.push(focus); }
   if (region_focus) { query += ` AND region_focus = ?`; params.push(region_focus); }
+  if (search) {
+    query += ` AND (name LIKE ? OR organization LIKE ? OR country LIKE ?)`;
+    const like = `%${search}%`;
+    params.push(like, like, like);
+  }
 
-  query += ` ORDER BY deadline ASC LIMIT 50`;
+  query += ` ORDER BY deadline ASC LIMIT 500`;
 
   const result = await c.env.DB.prepare(query).bind(...params).all();
   return c.json({ data: result.results });
@@ -465,14 +508,19 @@ app.post('/api/funds', async (c) => {
 // MODULE 3: Education & Residency (global)
 // ============================================================
 app.get('/api/education', async (c) => {
-  const { type, status = 'active' } = c.req.query();
+  const { type, status = 'active', search } = c.req.query();
 
   let query = `SELECT * FROM education_residency WHERE status = ?`;
   const params: unknown[] = [status];
 
   if (type) { query += ` AND type = ?`; params.push(type); }
+  if (search) {
+    query += ` AND (name LIKE ? OR organization LIKE ? OR country LIKE ?)`;
+    const like = `%${search}%`;
+    params.push(like, like, like);
+  }
 
-  query += ` ORDER BY deadline ASC LIMIT 50`;
+  query += ` ORDER BY deadline ASC LIMIT 500`;
 
   const result = await c.env.DB.prepare(query).bind(...params).all();
   return c.json({ data: result.results });

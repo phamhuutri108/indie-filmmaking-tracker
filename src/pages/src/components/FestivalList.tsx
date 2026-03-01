@@ -300,7 +300,7 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
 
   const load = () => {
     setLoading(true);
-    fetch(`${API_BASE}/festivals?limit=100`)
+    fetch(`${API_BASE}/festivals`)
       .then((r) => r.json() as Promise<{ data: Festival[] }>)
       .then((d) => setItems(d.data ?? []))
       .catch(() => setItems([]))

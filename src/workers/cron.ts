@@ -14,13 +14,24 @@ export interface Env {
 export async function handleCron(env: Env): Promise<void> {
   console.log('[IFT Cron] Starting daily run:', new Date().toISOString());
 
-  await Promise.allSettled([
-    runScraper(env),
-    runCineuropa(env),
-    runFundScraper(env),
-    checkMonitorCommands(env),
-    sendDailyDigest(env),
-  ]);
+  const tasks: Array<[string, Promise<void>]> = [
+    ['AsianFilmFestivals scraper', runScraper(env)],
+    ['Cineuropa scraper', runCineuropa(env)],
+    ['Fund scraper', runFundScraper(env)],
+    ['Monitor alerts', checkMonitorCommands(env)],
+    ['Daily digest', sendDailyDigest(env)],
+  ];
+
+  const results = await Promise.allSettled(tasks.map(([, p]) => p));
+
+  const failed = results
+    .map((r, i) => (r.status === 'rejected' ? { task: tasks[i][0], reason: r.reason } : null))
+    .filter(Boolean) as Array<{ task: string; reason: unknown }>;
+
+  if (failed.length > 0) {
+    console.error('[IFT Cron] Failed tasks:', failed.map(f => f.task));
+    await sendErrorAlert(env, failed);
+  }
 
   console.log('[IFT Cron] Done.');
 }
@@ -90,6 +101,18 @@ async function checkMonitorCommands(env: Env): Promise<void> {
     );
 
     if (daysUntil === cmd.alert_days_before || daysUntil === 1) {
+      // Deduplication: skip if alert already sent for this monitor in last 24h
+      const alreadySent = await env.DB.prepare(
+        `SELECT id FROM email_logs
+         WHERE template = 'alert' AND ref_table = ? AND ref_id = ?
+           AND created_at > datetime('now', '-24 hours')`
+      ).bind(cmd.ref_table, cmd.ref_id).first();
+
+      if (alreadySent) {
+        console.log(`[Cron] Monitor alert skipped (dedup): ${cmd.ref_name} (${cmd.ref_table}/${cmd.ref_id})`);
+        continue;
+      }
+
       await triggerAlert(env, cmd, daysUntil);
     }
   }
@@ -222,4 +245,25 @@ function buildDigestEmail(items: any[]): string {
       <p style="color: #718096; font-size: 12px;">IFT — Indie Filmmaking Tracker</p>
     </div>
   `;
+}
+
+async function sendErrorAlert(env: Env, failed: Array<{ task: string; reason: unknown }>): Promise<void> {
+  const rows = failed
+    .map(f => `<li><strong>${f.task}</strong>: ${String(f.reason)}</li>`)
+    .join('');
+
+  await sendEmail(env, {
+    to: env.ALERT_EMAIL,
+    subject: `[IFT] Cron failure — ${failed.length} task(s) failed`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #e53e3e;">⚠️ IFT Cron Job Failed</h2>
+        <p>${failed.length} task(s) failed during the daily run at ${new Date().toISOString()}:</p>
+        <ul>${rows}</ul>
+        <p>Check Cloudflare Workers logs for details.</p>
+        <hr/>
+        <p style="color: #718096; font-size: 12px;">IFT — Indie Filmmaking Tracker</p>
+      </div>
+    `,
+  });
 }

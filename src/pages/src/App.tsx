@@ -25,7 +25,9 @@ function tabFromPath(): Tab {
 }
 
 export default function App() {
-  const [lang, setLang] = useState<Lang>('vi');
+  const [lang, setLang] = useState<Lang>(
+    () => (localStorage.getItem('ift-lang') as Lang) ?? 'vi'
+  );
   const [tab, setTab] = useState<Tab>(tabFromPath);
   const [showUsers, setShowUsers] = useState(false);
   const [showSignIn, setShowSignIn] = useState(() => {
@@ -37,6 +39,9 @@ export default function App() {
   const { role, login, logout } = useAuth();
   const isOwner = role === 'owner';
   const isLoggedIn = role === 'owner' || role === 'member';
+
+  // Persist language preference
+  useEffect(() => { localStorage.setItem('ift-lang', lang); }, [lang]);
 
   // Sync URL → tab + sign-in overlay on browser back/forward
   useEffect(() => {
