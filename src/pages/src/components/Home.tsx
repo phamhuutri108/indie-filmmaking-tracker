@@ -155,21 +155,20 @@ export function Home({ lang }: { lang: Lang }) {
         </div>
 
         <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-          <a href="https://www.phamhuutri.com" target="_blank" rel="noreferrer" style={{ display: 'block' }}>
+          {/* Link tạm ẩn */}
+          <div style={{ display: 'block' }}>
             <img
               src="/profile-image.jpeg"
               alt="Tri Pham"
               style={{ width: 270, aspectRatio: '3/4', objectFit: 'cover', objectPosition: 'top', borderRadius: 8, display: 'block' }}
             />
-          </a>
-          <a
-            href="https://www.phamhuutri.com"
-            target="_blank"
-            rel="noreferrer"
+          </div>
+          {/* Link tạm ẩn */}
+          <span
             style={{ fontSize: 13, color: '#004aad', textDecoration: 'none', marginTop: 10, fontWeight: 600 }}
           >
             {bio.moreAboutMe}
-          </a>
+          </span>
         </div>
       </div>
 

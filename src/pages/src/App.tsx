@@ -135,15 +135,6 @@ export default function App() {
               alt="Indie Filmmaking Tracker"
               style={{ height: 48, width: 'auto', objectFit: 'contain', display: 'block' }}
             />
-            <a
-              href="https://www.phamhuutri.com"
-              target="_blank"
-              rel="noreferrer"
-              className="header-my-website"
-              style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', textDecoration: 'none', whiteSpace: 'nowrap' }}
-            >
-              MY WEBSITE
-            </a>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -247,9 +238,10 @@ export default function App() {
       {/* Footer */}
       <footer style={{ marginTop: 48, paddingBottom: 32, fontSize: 13, color: '#a0aec0', textAlign: 'center' }}>
         © 2026{' '}
-        <a href="https://www.phamhuutri.com" target="_blank" rel="noreferrer" style={{ color: '#718096' }}>
+        {/* Link tạm ẩn */}
+        <span style={{ color: '#718096' }}>
           Pham Huu Tri
-        </a>.
+        </span>.
       </footer>
     </div>
   );
