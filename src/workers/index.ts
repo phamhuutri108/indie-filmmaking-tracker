@@ -439,16 +439,9 @@ app.post('/api/chat/messages', async (c) => {
     return c.json({ error: 'Only owner can post announcements' }, 403);
   }
 
-  const inserted = await c.env.DB.prepare(
-    `INSERT INTO chat_messages (channel, content, author_name, author_role)
-     VALUES (?, ?, ?, ?) RETURNING id, created_at`
-  ).bind(channel, content, user.name ?? user.email ?? 'Member', user.role).first<{ id: number; created_at: string }>();
-
-  // Blast email to all approved members when owner posts announcement
-  let emailCount = 0;
-  if (channel === 'announcements' && user.role === 'owner' && c.env.RESEND_API_KEY) {
-    // Test mode: send preview to one address only, do NOT save to DB
-    if (testEmail) {
+  // ── Test mode: send preview email only, do NOT insert into DB ─────────────
+  if (testEmail && channel === 'announcements' && user.role === 'owner') {
+    if (c.env.RESEND_API_KEY) {
       try {
         await fetch('https://api.resend.com/emails', {
           method: 'POST',
@@ -464,9 +457,19 @@ app.post('/api/chat/messages', async (c) => {
           }),
         });
       } catch { /* best-effort */ }
-      return c.json({ data: null, emailCount: 0, test: true }, 200);
     }
+    return c.json({ data: null, emailCount: 0, test: true }, 200);
+  }
 
+  // ── Real send: insert into DB ────────────────────────────────────────────
+  const inserted = await c.env.DB.prepare(
+    `INSERT INTO chat_messages (channel, content, author_name, author_role)
+     VALUES (?, ?, ?, ?) RETURNING id, created_at`
+  ).bind(channel, content, user.name ?? user.email ?? 'Member', user.role).first<{ id: number; created_at: string }>();
+
+  // Blast email to all approved members when owner posts announcement
+  let emailCount = 0;
+  if (channel === 'announcements' && user.role === 'owner' && c.env.RESEND_API_KEY) {
     const members = await c.env.DB.prepare(
       `SELECT email, name FROM users WHERE status = 'approved' AND role = 'member'`
     ).all<{ email: string; name: string }>();
