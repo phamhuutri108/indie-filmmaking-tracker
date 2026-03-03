@@ -49,7 +49,14 @@ function FestivalDetail({
   ) : undefined;
   return (
     <Modal isOpen title={festival.name} onClose={onClose} maxWidth={660} action={starAction}>
-      {/* Country / city */}
+      {/* Broken URL warning */}
+      {festival.website_ok === 0 && (
+        <div style={{ background: '#fff5f5', border: '1px solid #fed7d7', borderRadius: 6, padding: '8px 12px', marginBottom: 16, fontSize: 13, color: '#c53030', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+          ⚠️ <span><strong>Website link may be broken.</strong> The URL could not be reached when last checked. Please verify it before applying.</span>
+        </div>
+      )}
+
+      {/* Country / city */}}
       {(festival.country || festival.city) && (
         <p style={{ margin: '0 0 16px', color: '#718096', fontSize: 14 }}>
           📍 {[festival.city, festival.country].filter(Boolean).join(', ')}
@@ -453,6 +460,9 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
               <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                 <div>
                   <strong style={{ fontSize: 15, color: '#1a202c' }}>{f.name}</strong>
+                  {isOwner && f.website_ok === 0 && (
+                    <span title="Website may be broken" style={{ marginLeft: 6, fontSize: 13, color: '#c53030' }}>⚠️</span>
+                  )}
                   {(f.city || f.country) && (
                     <span style={{ fontSize: 13, color: '#718096', marginLeft: 8 }}>
                       {[f.city, f.country].filter(Boolean).join(', ')}

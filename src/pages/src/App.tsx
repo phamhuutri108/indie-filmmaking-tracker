@@ -225,7 +225,7 @@ export default function App() {
       {/* Content */}
       <main style={{ maxWidth: tab === 'home' ? 'none' : 960, margin: '0 auto', padding: tab === 'home' ? '0' : '28px 16px' }}>
         {tab === 'home'        && <Home lang={lang} />}
-        {tab === 'dashboard'   && <Dashboard t={t} isLoggedIn={isLoggedIn} />}
+        {tab === 'dashboard'   && <Dashboard t={t} isLoggedIn={isLoggedIn} isOwner={isOwner} />}
         {tab === 'festivals'   && <FestivalList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} />}
         {tab === 'funds'       && <FundList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} />}
         {tab === 'education'   && <EducationList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} />}

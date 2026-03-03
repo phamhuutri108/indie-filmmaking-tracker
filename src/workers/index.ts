@@ -9,6 +9,7 @@ import { scrapeAsianFilmFestivals } from './scraper';
 import { scrapeFunds } from './fund-scraper';
 import { generateICS, dbRowsToEvents } from './calendar';
 import { signJWT, verifyJWT, getUserFromRequest } from './auth';
+import { verifySingleUrl, verifyAllUrls } from './url-verifier';
 
 // Injected by wrangler at build time when [site] is configured
 // @ts-ignore
@@ -37,6 +38,22 @@ app.use('/api/*', cors({ origin: '*' }));
 app.get('/api/health', (c) =>
   c.json({ status: 'ok', ts: new Date().toISOString() })
 );
+
+// ============================================================
+// Admin: Trigger URL health check manually
+// ============================================================
+app.post('/api/admin/check-urls', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user || user.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
+  // Run in background — return immediately, don't block
+  const result = await verifyAllUrls(c.env.DB, 10);
+  return c.json({
+    checked: result.checked,
+    fixed: result.fixed,
+    broken: result.broken.length,
+    brokenList: result.broken,
+  });
+});
 
 // ============================================================
 // AUTH
@@ -441,16 +458,25 @@ app.post('/api/festivals', async (c) => {
     description, description_vi, source,
   } = body as any;
 
+  // Verify and canonicalise website URL
+  let verifiedWebsite = website || null;
+  let websiteOk: number | null = null;
+  if (verifiedWebsite) {
+    const vr = await verifySingleUrl(verifiedWebsite);
+    verifiedWebsite = vr.canonicalUrl;
+    websiteOk = vr.ok ? 1 : 0;
+  }
+
   const result = await c.env.DB.prepare(
     `INSERT INTO festivals (name, name_vi, country, city, website, filmfreeway_url, category, tier,
       early_deadline, regular_deadline, late_deadline, notification_date, festival_dates,
-      entry_fee_early, entry_fee_regular, description, description_vi, source)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(name, name_vi, country, city, website, filmfreeway_url, category, tier,
+      entry_fee_early, entry_fee_regular, description, description_vi, source, website_ok, website_checked_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+  ).bind(name, name_vi, country, city, verifiedWebsite, filmfreeway_url, category, tier,
     early_deadline, regular_deadline, late_deadline, notification_date, festival_dates,
-    entry_fee_early, entry_fee_regular, description, description_vi, source).run();
+    entry_fee_early, entry_fee_regular, description, description_vi, source, websiteOk).run();
 
-  return c.json({ id: result.meta.last_row_id }, 201);
+  return c.json({ id: result.meta.last_row_id, website_ok: websiteOk, website: verifiedWebsite }, 201);
 });
 
 // ============================================================
@@ -494,14 +520,24 @@ app.post('/api/funds', async (c) => {
     open_date, deadline, eligibility, eligibility_vi,
     description, description_vi,
   } = body as any;
+  // Verify and canonicalise website URL
+  let verifiedWebsite = website || null;
+  let websiteOk: number | null = null;
+  if (verifiedWebsite) {
+    const vr = await verifySingleUrl(verifiedWebsite);
+    verifiedWebsite = vr.canonicalUrl;
+    websiteOk = vr.ok ? 1 : 0;
+  }
+
   const result = await c.env.DB.prepare(
     `INSERT INTO funds_grants (name, name_vi, organization, country, website, type, focus, region_focus,
-      max_amount, currency, open_date, deadline, eligibility, eligibility_vi, description, description_vi)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(name, name_vi, organization, country, website, type, focus, region_focus,
+      max_amount, currency, open_date, deadline, eligibility, eligibility_vi, description, description_vi,
+      website_ok, website_checked_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+  ).bind(name, name_vi, organization, country, verifiedWebsite, type, focus, region_focus,
     max_amount, currency ?? 'USD', open_date, deadline, eligibility, eligibility_vi,
-    description, description_vi).run();
-  return c.json({ id: result.meta.last_row_id }, 201);
+    description, description_vi, websiteOk).run();
+  return c.json({ id: result.meta.last_row_id, website_ok: websiteOk, website: verifiedWebsite }, 201);
 });
 
 // ============================================================
@@ -543,16 +579,26 @@ app.post('/api/education', async (c) => {
     stipend, covers_travel, covers_accommodation,
     eligibility, eligibility_vi, description, description_vi,
   } = body as any;
+  // Verify and canonicalise website URL
+  let verifiedWebsite = website || null;
+  let websiteOk: number | null = null;
+  if (verifiedWebsite) {
+    const vr = await verifySingleUrl(verifiedWebsite);
+    verifiedWebsite = vr.canonicalUrl;
+    websiteOk = vr.ok ? 1 : 0;
+  }
+
   const result = await c.env.DB.prepare(
     `INSERT INTO education_residency (name, name_vi, organization, country, city, website, type,
       duration, application_open, deadline, program_dates, stipend, covers_travel,
-      covers_accommodation, eligibility, eligibility_vi, description, description_vi)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(name, name_vi, organization, country, city, website, type,
+      covers_accommodation, eligibility, eligibility_vi, description, description_vi,
+      website_ok, website_checked_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+  ).bind(name, name_vi, organization, country, city, verifiedWebsite, type,
     duration, application_open, deadline, program_dates, stipend ?? null,
     covers_travel ? 1 : 0, covers_accommodation ? 1 : 0,
-    eligibility, eligibility_vi, description, description_vi).run();
-  return c.json({ id: result.meta.last_row_id }, 201);
+    eligibility, eligibility_vi, description, description_vi, websiteOk).run();
+  return c.json({ id: result.meta.last_row_id, website_ok: websiteOk, website: verifiedWebsite }, 201);
 });
 
 // ============================================================
