@@ -382,6 +382,131 @@ app.post('/api/feedback', async (c) => {
 });
 
 // ============================================================
+// Chat / Announcement Channel
+// ============================================================
+
+// GET messages for a channel (paginated, newest first)
+app.get('/api/chat/messages', async (c) => {
+  const channel = c.req.query('channel') ?? 'announcements';
+  const since = Number(c.req.query('since') ?? 0); // return only id > since
+
+  if (!['announcements', 'feedback'].includes(channel)) {
+    return c.json({ error: 'Invalid channel' }, 400);
+  }
+
+  const result = await c.env.DB.prepare(
+    `SELECT id, channel, content, author_name, author_role, created_at
+     FROM chat_messages
+     WHERE channel = ? AND id > ?
+     ORDER BY created_at ASC
+     LIMIT 100`
+  ).bind(channel, since).all();
+
+  return c.json({ data: result.results });
+});
+
+// GET latest message id per channel (for unread badge polling)
+app.get('/api/chat/latest', async (c) => {
+  const ann = await c.env.DB.prepare(
+    `SELECT id, created_at FROM chat_messages WHERE channel='announcements' ORDER BY id DESC LIMIT 1`
+  ).first<{ id: number; created_at: string }>();
+  const fb = await c.env.DB.prepare(
+    `SELECT id, created_at FROM chat_messages WHERE channel='feedback' ORDER BY id DESC LIMIT 1`
+  ).first<{ id: number; created_at: string }>();
+  return c.json({
+    announcements: ann?.id ?? 0,
+    feedback: fb?.id ?? 0,
+  });
+});
+
+// POST new message
+// - announcements: owner only → also emails all approved members
+// - feedback: any logged-in user
+app.post('/api/chat/messages', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const body = await c.req.json<{ channel: string; content: string }>();
+  const channel = body.channel;
+  const content = (body.content ?? '').trim();
+
+  if (!['announcements', 'feedback'].includes(channel)) {
+    return c.json({ error: 'Invalid channel' }, 400);
+  }
+  if (!content) return c.json({ error: 'Empty message' }, 400);
+  if (channel === 'announcements' && user.role !== 'owner') {
+    return c.json({ error: 'Only owner can post announcements' }, 403);
+  }
+
+  const inserted = await c.env.DB.prepare(
+    `INSERT INTO chat_messages (channel, content, author_name, author_role)
+     VALUES (?, ?, ?, ?) RETURNING id, created_at`
+  ).bind(channel, content, user.name ?? user.email ?? 'Member', user.role).first<{ id: number; created_at: string }>();
+
+  // Blast email to all approved members when owner posts announcement
+  let emailCount = 0;
+  if (channel === 'announcements' && user.role === 'owner' && c.env.RESEND_API_KEY) {
+    const members = await c.env.DB.prepare(
+      `SELECT email, name FROM users WHERE status = 'approved' AND role = 'member'`
+    ).all<{ email: string; name: string }>();
+
+    for (const m of members.results ?? []) {
+      try {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${c.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'IFT Announcements <noreply@indiefilmmakingtracker.com>',
+            to: [m.email],
+            subject: '📢 IFT — New Announcement / Thông báo mới',
+            html: buildAnnouncementEmail(content, m.name, c.env.APP_URL),
+          }),
+        });
+        emailCount++;
+      } catch { /* best-effort */ }
+    }
+
+    if (inserted?.id) {
+      await c.env.DB.prepare(`UPDATE chat_messages SET email_sent = ? WHERE id = ?`)
+        .bind(emailCount, inserted.id).run();
+    }
+  }
+
+  return c.json({ data: inserted, emailCount }, 201);
+});
+
+function buildAnnouncementEmail(content: string, recipientName: string, appUrl: string): string {
+  const escaped = content.replace(/\n/g, '<br>');
+  const name = recipientName ? `<p>Hi <strong>${recipientName}</strong>,</p>` : '';
+  return `
+    <div style="font-family:sans-serif;max-width:620px;margin:0 auto;padding:24px;background:#f8f9fa;">
+      <div style="background:#fff;border-radius:12px;padding:28px 32px;box-shadow:0 2px 8px rgba(0,0,0,.08);">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+          <span style="font-size:28px;">📢</span>
+          <h2 style="margin:0;color:#004aad;font-size:20px;">IFT Announcement</h2>
+        </div>
+        ${name}
+        <div style="background:#EBF8FF;border-left:4px solid #004aad;border-radius:6px;padding:16px 20px;margin:16px 0;font-size:15px;line-height:1.7;color:#2d3748;">
+          ${escaped}
+        </div>
+        <p style="margin:20px 0 0;">
+          <a href="${appUrl}/dashboard"
+             style="display:inline-block;padding:10px 20px;background:#004aad;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">
+            View on IFT Dashboard →
+          </a>
+        </p>
+      </div>
+      <p style="text-align:center;color:#a0aec0;font-size:12px;margin-top:16px;">
+        IFT — Indie Filmmaking Tracker · <a href="${appUrl}" style="color:#718096;">indiefilmmakingtracker.com</a>
+      </p>
+    </div>
+  `;
+}
+
+// ============================================================
 // Manual triggers
 // ============================================================
 app.get('/api/scrape', async (c) => {

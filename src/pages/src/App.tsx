@@ -11,6 +11,7 @@ import { Submissions } from './components/Submissions';
 import { Watchlist } from './components/Watchlist';
 import { AuthGate, useAuth, getAuthUserName } from './components/AuthGate';
 import { UserManager } from './components/UserManager';
+import { ChatChannel } from './components/ChatChannel';
 import { decodeJWT } from './apiFetch';
 
 type Tab = 'home' | 'dashboard' | 'festivals' | 'funds' | 'education' | 'monitors' | 'films' | 'submissions' | 'watchlist';
@@ -221,6 +222,9 @@ export default function App() {
       </div>
 
       {showUsers && <UserManager onClose={() => setShowUsers(false)} />}
+
+      {/* Floating chat channel — visible on all pages */}
+      <ChatChannel isLoggedIn={isLoggedIn} isOwner={isOwner} lang={lang} />
 
       {/* Content */}
       <main style={{ maxWidth: tab === 'home' ? 'none' : 960, margin: '0 auto', padding: tab === 'home' ? '0' : '28px 16px' }}>
