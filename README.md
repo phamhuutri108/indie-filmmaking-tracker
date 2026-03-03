@@ -76,4 +76,4 @@ Mọi góp ý, báo lỗi, hoặc đề xuất tính năng — vui lòng mở [G
 
 ---
 
-© 2026 Pham Huu Tri <!-- Link tạm ẩn: https://phamhuutri.com -->
+© 2026 [Pham Huu Tri](https://www.phamhuutri.com)

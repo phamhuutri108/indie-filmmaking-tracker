@@ -242,10 +242,9 @@ export default function App() {
       {/* Footer */}
       <footer style={{ marginTop: 48, paddingBottom: 32, fontSize: 13, color: '#a0aec0', textAlign: 'center' }}>
         © 2026{' '}
-        {/* Link tạm ẩn */}
-        <span style={{ color: '#718096' }}>
+        <a href="https://www.phamhuutri.com" target="_blank" rel="noopener noreferrer" style={{ color: '#718096' }}>
           Pham Huu Tri
-        </span>.
+        </a>.
       </footer>
     </div>
   );
