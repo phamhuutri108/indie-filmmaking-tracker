@@ -56,7 +56,7 @@ function FestivalDetail({
         </div>
       )}
 
-      {/* Country / city */}}
+      {/* Country / city */}
       {(festival.country || festival.city) && (
         <p style={{ margin: '0 0 16px', color: '#718096', fontSize: 14 }}>
           📍 {[festival.city, festival.country].filter(Boolean).join(', ')}
