@@ -223,8 +223,8 @@ export default function App() {
 
       {showUsers && <UserManager onClose={() => setShowUsers(false)} />}
 
-      {/* Floating chat channel — visible on all pages */}
-      <ChatChannel isLoggedIn={isLoggedIn} isOwner={isOwner} lang={lang} />
+      {/* Floating chat channel — only for logged-in users */}
+      {isLoggedIn && <ChatChannel isLoggedIn={isLoggedIn} isOwner={isOwner} lang={lang} />}
 
       {/* Content */}
       <main style={{ maxWidth: tab === 'home' ? 'none' : 960, margin: '0 auto', padding: tab === 'home' ? '0' : '28px 16px' }}>
