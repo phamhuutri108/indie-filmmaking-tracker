@@ -43,12 +43,6 @@ function EducationDetail({
   ) : undefined;
   return (
     <Modal isOpen title={item.name} onClose={onClose} maxWidth={600} action={starAction}>
-      {/* Broken URL warning */}
-      {item.website_ok === 0 && (
-        <div style={{ background: '#fff5f5', border: '1px solid #fed7d7', borderRadius: 6, padding: '8px 12px', marginBottom: 16, fontSize: 13, color: '#c53030', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-          ⚠️ <span><strong>Website link may be broken.</strong> The URL could not be reached when last checked. Please verify before applying.</span>
-        </div>
-      )}
       {item.organization && (
         <p style={{ margin: '0 0 14px', color: '#718096', fontSize: 14 }}>🏛 {item.organization}</p>
       )}
@@ -388,9 +382,6 @@ export function EducationList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof
               <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                 <div>
                   <strong style={{ fontSize: 15, color: '#1a202c' }}>{e.name}</strong>
-                  {isOwner && e.website_ok === 0 && (
-                    <span title="Website may be broken" style={{ marginLeft: 6, fontSize: 13, color: '#c53030' }}>⚠️</span>
-                  )}
                   {e.organization && (
                     <div style={{ fontSize: 13, color: '#718096', marginTop: 2 }}>{e.organization}</div>
                   )}

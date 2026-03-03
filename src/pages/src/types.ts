@@ -20,8 +20,6 @@ export interface Festival {
   description_vi?: string;
   status?: string;
   source?: string;
-  website_ok?: number;       // 1 = OK, 0 = broken, null = unchecked
-  website_checked_at?: string;
 }
 
 export interface Fund {
@@ -42,8 +40,6 @@ export interface Fund {
   description?: string;
   status?: string;
   last_checked?: string;
-  website_ok?: number;
-  website_checked_at?: string;
 }
 
 export interface Education {
@@ -64,8 +60,6 @@ export interface Education {
   eligibility?: string;
   description?: string;
   status?: string;
-  website_ok?: number;
-  website_checked_at?: string;
 }
 
 export interface Monitor {

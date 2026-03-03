@@ -154,29 +154,13 @@ const TYPE_COLORS: Record<string, string> = {
   education: '#805ad5',
 };
 
-export function Dashboard({ t, isLoggedIn = false, isOwner = false }: { t: ReturnType<typeof useI18n>; isLoggedIn?: boolean; isOwner?: boolean }) {
+export function Dashboard({ t, isLoggedIn = false }: { t: ReturnType<typeof useI18n>; isLoggedIn?: boolean }) {
   const [items, setItems] = useState<DashboardItem[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedDetail, setSelectedDetail] = useState<{ item: AnyItem; type: DashboardItem['type'] } | null>(null);
   const [fetchingDetail, setFetchingDetail] = useState(false);
   const [watchlistIds, setWatchlistIds] = useState<Map<string, number>>(new Map()); // key: `type:id`
-  const [urlCheckResult, setUrlCheckResult] = useState<{ checked: number; fixed: number; broken: number } | null>(null);
-  const [urlChecking, setUrlChecking] = useState(false);
-
-  const handleCheckUrls = async () => {
-    setUrlChecking(true);
-    setUrlCheckResult(null);
-    try {
-      const res = await apiFetch(`${API_BASE}/admin/check-urls`, { method: 'POST' });
-      const json = await res.json() as { checked: number; fixed: number; broken: number };
-      setUrlCheckResult(json);
-    } catch {
-      setUrlCheckResult({ checked: 0, fixed: 0, broken: -1 });
-    } finally {
-      setUrlChecking(false);
-    }
-  };
 
   useEffect(() => {
     Promise.all([
@@ -272,41 +256,7 @@ export function Dashboard({ t, isLoggedIn = false, isOwner = false }: { t: Retur
         >
           📅 {t.calendar.exportIcs}
         </a>
-        {isOwner && (
-          <button
-            onClick={handleCheckUrls}
-            disabled={urlChecking}
-            title="Check all festival/fund/education website URLs for broken links"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '7px 14px', background: urlChecking ? '#e2e8f0' : '#fff',
-              border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13, fontWeight: 600,
-              color: '#2d3748', cursor: urlChecking ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
-            }}
-          >
-            {urlChecking ? '🔄 Checking...' : '🔗 Check URLs'}
-          </button>
-        )}
       </div>
-
-      {/* URL check result */}
-      {urlCheckResult && (
-        <div style={{
-          background: urlCheckResult.broken > 0 ? '#fff5f5' : '#f0fff4',
-          border: `1px solid ${urlCheckResult.broken > 0 ? '#fed7d7' : '#c6f6d5'}`,
-          borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13,
-          color: urlCheckResult.broken > 0 ? '#c53030' : '#276749',
-          display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap',
-        }}>
-          {urlCheckResult.broken === -1
-            ? '❌ URL check failed — please try again.'
-            : `✅ Checked ${urlCheckResult.checked} URLs \u2014 ${urlCheckResult.fixed} redirect(s) auto-fixed, ${urlCheckResult.broken} broken.`}
-          {urlCheckResult.broken > 0 && (
-            <span style={{ color: '#718096' }}>Look for ⚠️ badges in Festivals / Funds / Education tabs.</span>
-          )}
-          <button onClick={() => setUrlCheckResult(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#a0aec0', fontSize: 16 }}>✕</button>
-        </div>
-      )}
 
       {/* Stats cards */}
       {stats && (

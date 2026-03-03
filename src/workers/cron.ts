@@ -3,7 +3,6 @@
 
 import { scrapeAsianFilmFestivals, scrapeCineuropaRss } from './scraper';
 import { scrapeFunds } from './fund-scraper';
-import { verifyAllUrls, buildBrokenUrlReport } from './url-verifier';
 import { buildBundledAlertEmail, buildDigestEmail, buildErrorAlertEmail, type AlertItem, type DigestItem } from './email-templates';
 
 export interface Env {
@@ -20,7 +19,6 @@ export async function handleCron(env: Env): Promise<void> {
     ['AsianFilmFestivals scraper', runScraper(env)],
     ['Cineuropa scraper', runCineuropa(env)],
     ['Fund scraper', runFundScraper(env)],
-    ['URL verifier', runUrlVerifier(env)],
     ['Monitor alerts', checkMonitorCommands(env)],
     ['Daily digest', sendDailyDigest(env)],
   ];
@@ -166,23 +164,6 @@ async function checkMonitorCommands(env: Env): Promise<void> {
   }
 }
 
-async function runUrlVerifier(env: Env): Promise<void> {
-  try {
-    const result = await verifyAllUrls(env.DB);
-    console.log(`[Cron] URLVerifier — checked: ${result.checked}, fixed: ${result.fixed}, broken: ${result.broken.length}`);
-    if (result.broken.length > 0) {
-      const html = buildBrokenUrlReport(result.broken);
-      await sendEmail(env, {
-        to: env.ALERT_EMAIL,
-        subject: `[IFT] ⚠️ ${result.broken.length} broken URL(s) detected`,
-        html: `<p style="color:#718096;font-size:14px">Daily URL health check found issues. ${result.fixed} redirect(s) were auto-fixed.</p>${html}`,
-      });
-    }
-  } catch (err) {
-    console.error('[Cron] URLVerifier failed:', err);
-  }
-}
-
 async function sendDailyDigest(env: Env): Promise<void> {
   const dayOfWeek = new Date().getDay();
   if (dayOfWeek !== 1) return; // Monday digest only
@@ -201,9 +182,7 @@ async function sendDailyDigest(env: Env): Promise<void> {
      LIMIT 20`
   ).all();
 
-  const hasDigest = upcoming.results.length > 0;
-
-  if (hasDigest) {
+  if (upcoming.results.length > 0) {
     await sendEmail(env, {
       to: env.ALERT_EMAIL,
       subject: '[IFT] Weekly Digest — Upcoming Deadlines',
