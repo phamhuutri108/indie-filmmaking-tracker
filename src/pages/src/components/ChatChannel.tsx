@@ -126,6 +126,8 @@ export function ChatChannel({ isLoggedIn, isOwner, lang }: Props) {
   });
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [testMode, setTestMode] = useState(false); // owner: preview before blast
+  const [testSent, setTestSent] = useState(false);
   const [emailNote, setEmailNote] = useState('');
   const [unread, setUnread] = useState<Record<Channel, boolean>>({ announcements: false, feedback: false });
   const [toast, setToast] = useState<string | null>(null);
@@ -225,21 +227,29 @@ export function ChatChannel({ isLoggedIn, isOwner, lang }: Props) {
   }, [poll]);
 
   // ── Send message ───────────────────────────────────────────────────────────
-  const send = async () => {
+  const send = async (opts?: { testEmail?: string }) => {
     if (!input.trim() || sending) return;
     setSending(true);
     setEmailNote('');
     try {
+      const payload: Record<string, string> = { channel, content: input.trim() };
+      if (opts?.testEmail) payload.test_email = opts.testEmail;
       const res = await apiFetch('/api/chat/messages', {
         method: 'POST',
-        body: JSON.stringify({ channel, content: input.trim() }),
+        body: JSON.stringify(payload),
       });
-      const json = await res.json() as { data: ChatMessage; emailCount?: number };
+      const json = await res.json() as { data: ChatMessage | null; emailCount?: number; test?: boolean };
+      if (json.test) {
+        setTestSent(true);
+        setEmailNote('✓ Test email sent to phamhuutri108@gmail.com — check your inbox!');
+        return;
+      }
       if (json.data) {
-        setMessages((prev) => ({ ...prev, [channel]: [...prev[channel], json.data] }));
+        setMessages((prev) => ({ ...prev, [channel]: [...prev[channel], json.data!] }));
         if (json.emailCount) setEmailNote(t.emailSent(json.emailCount));
       }
       setInput('');
+      setTestSent(false);
       const seen = getLastSeen();
       if (json.data?.id) setLastSeen(channel, json.data.id);
     } catch { /* ignore */ } finally {
@@ -249,6 +259,13 @@ export function ChatChannel({ isLoggedIn, isOwner, lang }: Props) {
 
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  };
+
+  // Reset test state when input changes
+  const onInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    if (testSent) setTestSent(false);
+    if (emailNote) setEmailNote('');
   };
 
   // ── Derived ────────────────────────────────────────────────────────────────
@@ -431,32 +448,69 @@ export function ChatChannel({ isLoggedIn, isOwner, lang }: Props) {
           {/* Input */}
           <div style={{ padding: '10px 14px', borderTop: '1px solid #e2e8f0', background: '#fff', flexShrink: 0 }}>
             {showInput ? (
-              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-                <textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={onKey}
-                  placeholder={channel === 'announcements' ? t.placeholder_ann : t.placeholder_fb}
-                  rows={2}
-                  style={{
-                    flex: 1, resize: 'none', border: '1px solid #e2e8f0',
-                    borderRadius: 8, padding: '8px 10px', fontSize: 13,
-                    fontFamily: 'inherit', outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-                <button
-                  onClick={send}
-                  disabled={sending || !input.trim()}
-                  style={{
-                    padding: '8px 14px', background: '#004aad', color: '#fff',
-                    border: 'none', borderRadius: 8, cursor: 'pointer',
-                    fontSize: 13, fontWeight: 600, flexShrink: 0,
-                    opacity: !input.trim() ? 0.5 : 1,
-                  }}
-                >
-                  {sending ? '…' : t.send}
-                </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                  <textarea
+                    value={input}
+                    onChange={onInputChange}
+                    onKeyDown={onKey}
+                    placeholder={channel === 'announcements' ? t.placeholder_ann : t.placeholder_fb}
+                    rows={2}
+                    style={{
+                      flex: 1, resize: 'none', border: '1px solid #e2e8f0',
+                      borderRadius: 8, padding: '8px 10px', fontSize: 13,
+                      fontFamily: 'inherit', outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <button
+                    onClick={() => send()}
+                    disabled={sending || !input.trim()}
+                    style={{
+                      padding: '8px 14px', background: '#004aad', color: '#fff',
+                      border: 'none', borderRadius: 8, cursor: 'pointer',
+                      fontSize: 13, fontWeight: 600, flexShrink: 0,
+                      opacity: !input.trim() ? 0.5 : 1,
+                    }}
+                  >
+                    {sending ? '…' : t.send}
+                  </button>
+                </div>
+                {/* Owner announcement: test + confirm row */}
+                {channel === 'announcements' && isOwner && input.trim() && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => send({ testEmail: 'phamhuutri108@gmail.com' })}
+                      disabled={sending}
+                      style={{
+                        flex: 1,
+                        padding: '6px 10px',
+                        background: testSent ? '#f0fff4' : '#fff',
+                        color: testSent ? '#38a169' : '#718096',
+                        border: `1px solid ${testSent ? '#68d391' : '#e2e8f0'}`,
+                        borderRadius: 7, cursor: 'pointer',
+                        fontSize: 12, fontWeight: 600,
+                      }}
+                    >
+                      {testSent ? '✓ Test sent' : '🧪 Test email'}
+                    </button>
+                    {testSent && (
+                      <button
+                        onClick={() => send()}
+                        disabled={sending}
+                        style={{
+                          flex: 1,
+                          padding: '6px 10px',
+                          background: '#38a169', color: '#fff',
+                          border: 'none', borderRadius: 7, cursor: 'pointer',
+                          fontSize: 12, fontWeight: 700,
+                        }}
+                      >
+                        📨 Send to all members
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <div style={{ fontSize: 12, color: '#a0aec0', textAlign: 'center' }}>

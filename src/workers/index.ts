@@ -426,9 +426,10 @@ app.post('/api/chat/messages', async (c) => {
   const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
   if (!user) return c.json({ error: 'Unauthorized' }, 401);
 
-  const body = await c.req.json<{ channel: string; content: string }>();
+  const body = await c.req.json<{ channel: string; content: string; test_email?: string }>();
   const channel = body.channel;
   const content = (body.content ?? '').trim();
+  const testEmail = (body.test_email ?? '').trim();
 
   if (!['announcements', 'feedback'].includes(channel)) {
     return c.json({ error: 'Invalid channel' }, 400);
@@ -446,6 +447,26 @@ app.post('/api/chat/messages', async (c) => {
   // Blast email to all approved members when owner posts announcement
   let emailCount = 0;
   if (channel === 'announcements' && user.role === 'owner' && c.env.RESEND_API_KEY) {
+    // Test mode: send preview to one address only, do NOT save to DB
+    if (testEmail) {
+      try {
+        await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${c.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: 'IFT Announcements <noreply@indiefilmmakingtracker.com>',
+            to: [testEmail],
+            subject: '[TEST PREVIEW] 📢 IFT Announcement',
+            html: buildAnnouncementEmail(content, 'Test Recipient', c.env.APP_URL),
+          }),
+        });
+      } catch { /* best-effort */ }
+      return c.json({ data: null, emailCount: 0, test: true }, 200);
+    }
+
     const members = await c.env.DB.prepare(
       `SELECT email, name FROM users WHERE status = 'approved' AND role = 'member'`
     ).all<{ email: string; name: string }>();
