@@ -111,9 +111,6 @@ export const en = {
     search: 'Search programs...',
     addEducation: 'Add Program',
     noResults: 'No programs found.',
-    subTabAll: 'All',
-    subTabPrograms: 'Labs & Residencies',
-    subTabScholarships: 'Study Abroad Scholarships',
     form: {
       title: 'Add Education / Residency',
       name: 'Program Name *',

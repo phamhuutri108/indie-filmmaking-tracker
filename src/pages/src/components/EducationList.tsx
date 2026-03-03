@@ -8,9 +8,6 @@ import type { Education } from '../types';
 const API_BASE = '/api';
 
 const EDU_TYPES = ['lab', 'residency', 'workshop', 'scholarship', 'masterclass'];
-const PROGRAM_TYPES = ['lab', 'residency', 'workshop', 'masterclass'];
-
-type SubTab = 'all' | 'programs' | 'scholarships';
 
 function formatDate(d?: string): string {
   if (!d) return '—';
@@ -257,7 +254,6 @@ const PER_PAGE = 20;
 export function EducationList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI18n>; isOwner: boolean; isLoggedIn: boolean }) {
   const [items, setItems] = useState<Education[]>([]);
   const [loading, setLoading] = useState(true);
-  const [subTab, setSubTab] = useState<SubTab>('all');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [page, setPage] = useState(1);
@@ -302,15 +298,11 @@ export function EducationList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof
 
   useEffect(() => { load(); loadWatchlist(); }, []);
 
-  useEffect(() => { setPage(1); }, [search, typeFilter, subTab]);
+  useEffect(() => { setPage(1); }, [search, typeFilter]);
 
   const filtered = useMemo(() => {
     let list = items;
-    // Sub-tab filter
-    if (subTab === 'programs') list = list.filter((e) => e.type !== 'scholarship');
-    else if (subTab === 'scholarships') list = list.filter((e) => e.type === 'scholarship');
-    // Type dropdown filter (only show when on 'all' or 'programs')
-    if (typeFilter && subTab !== 'scholarships') list = list.filter((e) => e.type === typeFilter);
+    if (typeFilter) list = list.filter((e) => e.type === typeFilter);
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(
@@ -345,40 +337,6 @@ export function EducationList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof
         )}
       </div>
 
-      {/* Sub-tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '2px solid #e2e8f0', paddingBottom: 0 }}>
-        {(['all', 'programs', 'scholarships'] as SubTab[]).map((tab) => {
-          const labels: Record<SubTab, string> = {
-            all: t.education.subTabAll,
-            programs: t.education.subTabPrograms,
-            scholarships: t.education.subTabScholarships,
-          };
-          const icons: Record<SubTab, string> = { all: '🎓', programs: '🏕', scholarships: '✈️' };
-          const active = subTab === tab;
-          return (
-            <button
-              key={tab}
-              onClick={() => { setSubTab(tab); setTypeFilter(''); }}
-              style={{
-                background: 'none',
-                border: 'none',
-                borderBottom: `2px solid ${active ? '#805ad5' : 'transparent'}`,
-                marginBottom: -2,
-                padding: '8px 14px',
-                cursor: 'pointer',
-                fontSize: 13,
-                fontWeight: active ? 700 : 400,
-                color: active ? '#805ad5' : '#718096',
-                whiteSpace: 'nowrap',
-                transition: 'color 0.15s',
-              }}
-            >
-              {icons[tab]} {labels[tab]}
-            </button>
-          );
-        })}
-      </div>
-
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <input
           placeholder={t.education.search}
@@ -386,18 +344,16 @@ export function EducationList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof
           onChange={(e) => setSearch(e.target.value)}
           style={{ ...inputStyle, flex: 1, minWidth: 180 }}
         />
-        {subTab !== 'scholarships' && (
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            style={{ ...inputStyle, width: 'auto', minWidth: 140 }}
-          >
-            <option value="">All types</option>
-            {(subTab === 'programs' ? PROGRAM_TYPES : EDU_TYPES).map((c) => (
-              <option key={c} value={c} style={{ textTransform: 'capitalize' }}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
-            ))}
-          </select>
-        )}
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          style={{ ...inputStyle, width: 'auto', minWidth: 140 }}
+        >
+          <option value="">All types</option>
+          {EDU_TYPES.map((c) => (
+            <option key={c} value={c} style={{ textTransform: 'capitalize' }}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+          ))}
+        </select>
       </div>
 
       {loading ? (

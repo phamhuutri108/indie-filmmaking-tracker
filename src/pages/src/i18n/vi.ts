@@ -111,9 +111,6 @@ export const vi = {
     search: 'Tìm chương trình...',
     addEducation: 'Thêm chương trình',
     noResults: 'Không tìm thấy chương trình.',
-    subTabAll: 'Tất cả',
-    subTabPrograms: 'Lab & Khu lưu trú',
-    subTabScholarships: 'Học bổng du học',
     form: {
       title: 'Thêm Học thuật / Khu lưu trú',
       name: 'Tên chương trình *',
