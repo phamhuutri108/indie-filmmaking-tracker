@@ -499,6 +499,52 @@ app.post('/api/chat/messages', async (c) => {
   return c.json({ data: inserted, emailCount }, 201);
 });
 
+// PUT /api/chat/messages/:id  (edit content)
+app.put('/api/chat/messages/:id', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const msgId = Number(c.req.param('id'));
+  const body = await c.req.json<{ content: string }>();
+  const content = (body.content ?? '').trim();
+  if (!content) return c.json({ error: 'Content required' }, 400);
+
+  const msg = await c.env.DB.prepare(
+    `SELECT id, author_name, author_role FROM chat_messages WHERE id = ?`
+  ).bind(msgId).first<{ id: number; author_name: string; author_role: string }>();
+  if (!msg) return c.json({ error: 'Not found' }, 404);
+
+  const authorName = user.name ?? user.email ?? '';
+  if (user.role !== 'owner' && msg.author_name !== authorName) {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
+
+  await c.env.DB.prepare(`UPDATE chat_messages SET content = ? WHERE id = ?`)
+    .bind(content, msgId).run();
+
+  return c.json({ ok: true, content });
+});
+
+// DELETE /api/chat/messages/:id
+app.delete('/api/chat/messages/:id', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user) return c.json({ error: 'Unauthorized' }, 401);
+
+  const msgId = Number(c.req.param('id'));
+  const msg = await c.env.DB.prepare(
+    `SELECT id, author_name, author_role FROM chat_messages WHERE id = ?`
+  ).bind(msgId).first<{ id: number; author_name: string; author_role: string }>();
+  if (!msg) return c.json({ error: 'Not found' }, 404);
+
+  const authorName = user.name ?? user.email ?? '';
+  if (user.role !== 'owner' && msg.author_name !== authorName) {
+    return c.json({ error: 'Forbidden' }, 403);
+  }
+
+  await c.env.DB.prepare(`DELETE FROM chat_messages WHERE id = ?`).bind(msgId).run();
+  return c.json({ ok: true });
+});
+
 function buildAnnouncementEmail(content: string, recipientName: string, appUrl: string): string {
   const escaped = content.replace(/\n/g, '<br>');
   const name = recipientName ? `<p>Hi <strong>${recipientName}</strong>,</p>` : '';

@@ -17,6 +17,7 @@ interface Props {
   isLoggedIn: boolean;
   isOwner: boolean;
   lang: 'vi' | 'en';
+  userName?: string;
 }
 
 // ─── Sound (Web Audio API — no external file) ─────────────────────────────────
@@ -63,6 +64,11 @@ const T = {
     loginRequired: 'Đăng nhập để gửi góp ý.',
     emailSent: (n: number) => `✓ Đã gửi email đến ${n} member(s)`,
     channel: 'Kênh',
+    edit: 'Sửa',
+    delete: 'Xóa',
+    save: 'Lưu',
+    cancel: 'Hủy',
+    deleteConfirm: 'Xóa tin nhắn này?',
   },
   en: {
     announcements: 'Announcements',
@@ -76,6 +82,11 @@ const T = {
     loginRequired: 'Sign in to send feedback.',
     emailSent: (n: number) => `✓ Emailed ${n} member(s)`,
     channel: 'Channel',
+    edit: 'Edit',
+    delete: 'Delete',
+    save: 'Save',
+    cancel: 'Cancel',
+    deleteConfirm: 'Delete this message?',
   },
 };
 
@@ -116,7 +127,7 @@ function Toast({ msg, onClose }: { msg: string; onClose: () => void }) {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export function ChatChannel({ isLoggedIn, isOwner, lang }: Props) {
+export function ChatChannel({ isLoggedIn, isOwner, lang, userName = '' }: Props) {
   const t = T[lang] ?? T.en;
   const [open, setOpen] = useState(false);
   const [channel, setChannel] = useState<Channel>('announcements');
@@ -133,6 +144,9 @@ export function ChatChannel({ isLoggedIn, isOwner, lang }: Props) {
   const [toast, setToast] = useState<string | null>(null);
   const [blinking, setBlinking] = useState(false);
   const [loadedChannels, setLoadedChannels] = useState<Set<Channel>>(new Set());
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editContent, setEditContent] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -266,6 +280,36 @@ export function ChatChannel({ isLoggedIn, isOwner, lang }: Props) {
     setInput(e.target.value);
     if (testSent) setTestSent(false);
     if (emailNote) setEmailNote('');
+  };
+
+  // ── Delete message ─────────────────────────────────────────────────────────
+  const deleteMessage = async (id: number) => {
+    if (!window.confirm(t.deleteConfirm)) return;
+    try {
+      await apiFetch(`/api/chat/messages/${id}`, { method: 'DELETE' });
+      setMessages((prev) => ({
+        announcements: prev.announcements.filter((m) => m.id !== id),
+        feedback: prev.feedback.filter((m) => m.id !== id),
+      }));
+    } catch { /* ignore */ }
+  };
+
+  // ── Save edited message ────────────────────────────────────────────────────
+  const saveEdit = async (id: number) => {
+    const newContent = editContent.trim();
+    if (!newContent) return;
+    try {
+      await apiFetch(`/api/chat/messages/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ content: newContent }),
+      });
+      setMessages((prev) => ({
+        announcements: prev.announcements.map((m) => m.id === id ? { ...m, content: newContent } : m),
+        feedback: prev.feedback.map((m) => m.id === id ? { ...m, content: newContent } : m),
+      }));
+      setEditingId(null);
+      setEditContent('');
+    } catch { /* ignore */ }
   };
 
   // ── Derived ────────────────────────────────────────────────────────────────
@@ -411,23 +455,94 @@ export function ChatChannel({ isLoggedIn, isOwner, lang }: Props) {
                 const isMe = isOwner && m.author_role === 'owner';
                 const isMember = !isOwner && m.author_role !== 'owner';
                 const alignRight = isMe || isMember;
+                const canAct = isOwner || m.author_name === userName;
+                const isEditing = editingId === m.id;
+                const isHovered = hoveredId === m.id;
                 return (
-                  <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: alignRight ? 'flex-end' : 'flex-start' }}>
-                    <div style={{
-                      maxWidth: '82%',
-                      background: m.author_role === 'owner' ? '#004aad' : '#fff',
-                      color: m.author_role === 'owner' ? '#fff' : '#2d3748',
-                      borderRadius: m.author_role === 'owner'
-                        ? '12px 12px 2px 12px'
-                        : '12px 12px 12px 2px',
-                      padding: '8px 12px',
-                      fontSize: 13, lineHeight: 1.55,
-                      boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word',
-                    }}>
-                      {m.content}
-                    </div>
+                  <div
+                    key={m.id}
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: alignRight ? 'flex-end' : 'flex-start', position: 'relative' }}
+                    onMouseEnter={() => setHoveredId(m.id)}
+                    onMouseLeave={() => setHoveredId(null)}
+                  >
+                    {/* Action buttons shown on hover */}
+                    {canAct && isHovered && !isEditing && (
+                      <div style={{
+                        display: 'flex', gap: 4, marginBottom: 4,
+                        flexDirection: alignRight ? 'row' : 'row-reverse',
+                      }}>
+                        <button
+                          onClick={() => { setEditingId(m.id); setEditContent(m.content); }}
+                          title={t.edit}
+                          style={{
+                            background: 'rgba(255,255,255,0.95)', border: '1px solid #e2e8f0',
+                            borderRadius: 6, cursor: 'pointer', padding: '2px 8px', fontSize: 11,
+                            color: '#4a5568', boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                          }}
+                        >✏️ {t.edit}</button>
+                        <button
+                          onClick={() => deleteMessage(m.id)}
+                          title={t.delete}
+                          style={{
+                            background: 'rgba(255,255,255,0.95)', border: '1px solid #fed7d7',
+                            borderRadius: 6, cursor: 'pointer', padding: '2px 8px', fontSize: 11,
+                            color: '#e53e3e', boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                          }}
+                        >🗑 {t.delete}</button>
+                      </div>
+                    )}
+                    {/* Edit mode: inline textarea */}
+                    {isEditing ? (
+                      <div style={{ maxWidth: '90%', width: '90%' }}>
+                        <textarea
+                          value={editContent}
+                          onChange={(e) => setEditContent(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(m.id); }
+                            if (e.key === 'Escape') { setEditingId(null); setEditContent(''); }
+                          }}
+                          rows={3}
+                          autoFocus
+                          style={{
+                            width: '100%', resize: 'none', border: '2px solid #004aad',
+                            borderRadius: 8, padding: '8px 10px', fontSize: 13,
+                            fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
+                          }}
+                        />
+                        <div style={{ display: 'flex', gap: 6, marginTop: 4, justifyContent: alignRight ? 'flex-end' : 'flex-start' }}>
+                          <button
+                            onClick={() => saveEdit(m.id)}
+                            style={{
+                              padding: '4px 12px', background: '#004aad', color: '#fff',
+                              border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                            }}
+                          >{t.save}</button>
+                          <button
+                            onClick={() => { setEditingId(null); setEditContent(''); }}
+                            style={{
+                              padding: '4px 12px', background: '#f7fafc', color: '#718096',
+                              border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer', fontSize: 12,
+                            }}
+                          >{t.cancel}</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{
+                        maxWidth: '82%',
+                        background: m.author_role === 'owner' ? '#004aad' : '#fff',
+                        color: m.author_role === 'owner' ? '#fff' : '#2d3748',
+                        borderRadius: m.author_role === 'owner'
+                          ? '12px 12px 2px 12px'
+                          : '12px 12px 12px 2px',
+                        padding: '8px 12px',
+                        fontSize: 13, lineHeight: 1.55,
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                      }}>
+                        {m.content}
+                      </div>
+                    )}
                     <div style={{ fontSize: 10, color: '#a0aec0', marginTop: 2, paddingInline: 4 }}>
                       {m.author_name} · {fmtTime(m.created_at)}
                     </div>
