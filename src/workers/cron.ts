@@ -22,7 +22,7 @@ export async function handleCron(env: Env): Promise<void> {
     ['Fund scraper', runFundScraper(env)],
     ['URL verifier', runUrlVerifier(env)],
     ['Monitor alerts', checkMonitorCommands(env)],
-    ['Daily digest', sendDailyDigest(env, brokenUrls)],
+    ['Daily digest', sendDailyDigest(env)],
   ];
 
   const results = await Promise.allSettled(tasks.map(([, p]) => p));
