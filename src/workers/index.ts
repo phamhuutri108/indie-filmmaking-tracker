@@ -426,7 +426,7 @@ app.get('/api/festivals', async (c) => {
 app.get('/api/festivals/:id', async (c) => {
   const row = await c.env.DB.prepare(`SELECT * FROM festivals WHERE id = ?`)
     .bind(c.req.param('id')).first();
-  return row ? c.json(row) : c.json({ error: 'Not found' }, 404);
+  return row ? c.json({ data: row }) : c.json({ error: 'Not found' }, 404);
 });
 
 app.post('/api/festivals', async (c) => {
@@ -480,7 +480,7 @@ app.get('/api/funds', async (c) => {
 app.get('/api/funds/:id', async (c) => {
   const row = await c.env.DB.prepare(`SELECT * FROM funds_grants WHERE id = ?`)
     .bind(c.req.param('id')).first();
-  return row ? c.json(row) : c.json({ error: 'Not found' }, 404);
+  return row ? c.json({ data: row }) : c.json({ error: 'Not found' }, 404);
 });
 
 app.post('/api/funds', async (c) => {
@@ -529,7 +529,7 @@ app.get('/api/education', async (c) => {
 app.get('/api/education/:id', async (c) => {
   const row = await c.env.DB.prepare(`SELECT * FROM education_residency WHERE id = ?`)
     .bind(c.req.param('id')).first();
-  return row ? c.json(row) : c.json({ error: 'Not found' }, 404);
+  return row ? c.json({ data: row }) : c.json({ error: 'Not found' }, 404);
 });
 
 app.post('/api/education', async (c) => {
