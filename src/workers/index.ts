@@ -294,6 +294,22 @@ app.get('/api/auth/approve/:id', async (c) => {
 
   if (user && c.env.RESEND_API_KEY) {
     await sendApprovalEmail(c.env.RESEND_API_KEY, c.env.APP_URL, user);
+    // Also send the latest announcement to the new member
+    const latestAnn = await c.env.DB.prepare(
+      `SELECT content FROM chat_messages WHERE channel = 'announcements' ORDER BY id DESC LIMIT 1`
+    ).first<{ content: string }>();
+    if (latestAnn) {
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${c.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: 'IFT Announcements <noreply@indiefilmmakingtracker.com>',
+          to: [user.email],
+          subject: '📢 IFT — Thông báo mới nhất / Latest Announcement',
+          html: buildAnnouncementEmail(latestAnn.content, user.name, c.env.APP_URL),
+        }),
+      }).catch(() => {});
+    }
   }
 
   return c.html(`
@@ -338,7 +354,25 @@ app.patch('/api/auth/users/:id', async (c) => {
     await c.env.DB.prepare(`UPDATE users SET status = ? WHERE id = ?`).bind(body.status, userId).run();
     if (body.status === 'approved' && c.env.RESEND_API_KEY) {
       const user = await c.env.DB.prepare(`SELECT name, email FROM users WHERE id = ?`).bind(userId).first<{ name: string; email: string }>();
-      if (user) await sendApprovalEmail(c.env.RESEND_API_KEY, c.env.APP_URL, user);
+      if (user) {
+        await sendApprovalEmail(c.env.RESEND_API_KEY, c.env.APP_URL, user);
+        // Also send the latest announcement to the new member
+        const latestAnn = await c.env.DB.prepare(
+          `SELECT content FROM chat_messages WHERE channel = 'announcements' ORDER BY id DESC LIMIT 1`
+        ).first<{ content: string }>();
+        if (latestAnn) {
+          await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${c.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              from: 'IFT Announcements <noreply@indiefilmmakingtracker.com>',
+              to: [user.email],
+              subject: '📢 IFT — Thông báo mới nhất / Latest Announcement',
+              html: buildAnnouncementEmail(latestAnn.content, user.name, c.env.APP_URL),
+            }),
+          }).catch(() => {});
+        }
+      }
     }
   }
   return c.json({ ok: true });
@@ -545,6 +579,39 @@ app.delete('/api/chat/messages/:id', async (c) => {
   }
 
   await c.env.DB.prepare(`DELETE FROM chat_messages WHERE id = ?`).bind(msgId).run();
+  return c.json({ ok: true });
+});
+
+// POST /api/chat/messages/:id/resend  (send a specific message to one email)
+app.post('/api/chat/messages/:id/resend', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user || user.role !== 'owner') return c.json({ error: 'Forbidden' }, 403);
+
+  const msgId = Number(c.req.param('id'));
+  const body = await c.req.json<{ email: string; name?: string }>();
+  const to = (body.email ?? '').trim();
+  if (!to) return c.json({ error: 'Email required' }, 400);
+
+  const msg = await c.env.DB.prepare(
+    `SELECT content FROM chat_messages WHERE id = ?`
+  ).bind(msgId).first<{ content: string }>();
+  if (!msg) return c.json({ error: 'Not found' }, 404);
+
+  if (c.env.RESEND_API_KEY) {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${c.env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'IFT Announcements <noreply@indiefilmmakingtracker.com>',
+        to: [to],
+        subject: '📢 IFT — Thông báo / Announcement',
+        html: buildAnnouncementEmail(msg.content, body.name ?? '', c.env.APP_URL),
+      }),
+    });
+  }
   return c.json({ ok: true });
 });
 

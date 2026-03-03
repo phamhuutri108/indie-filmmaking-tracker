@@ -147,6 +147,10 @@ export function ChatChannel({ isLoggedIn, isOwner, lang, userName = '' }: Props)
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState('');
+  const [resendId, setResendId] = useState<number | null>(null);
+  const [resendEmail, setResendEmail] = useState('');
+  const [resendSending, setResendSending] = useState(false);
+  const [resendDone, setResendDone] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -312,6 +316,26 @@ export function ChatChannel({ isLoggedIn, isOwner, lang, userName = '' }: Props)
     } catch { /* ignore */ }
   };
 
+  // ── Resend message to one email ─────────────────────────────────────────────
+  const resendMessage = async (id: number) => {
+    if (!resendEmail.trim() || resendSending) return;
+    setResendSending(true);
+    try {
+      await apiFetch(`/api/chat/messages/${id}/resend`, {
+        method: 'POST',
+        body: JSON.stringify({ email: resendEmail.trim() }),
+      });
+      setResendDone(true);
+      setTimeout(() => {
+        setResendId(null);
+        setResendEmail('');
+        setResendDone(false);
+      }, 2500);
+    } catch { /* ignore */ } finally {
+      setResendSending(false);
+    }
+  };
+
   // ── Derived ────────────────────────────────────────────────────────────────
   const totalUnread = (unread.announcements ? 1 : 0) + (unread.feedback && isOwner ? 1 : 0);
   const canSend = channel === 'announcements' ? isOwner
@@ -466,7 +490,7 @@ export function ChatChannel({ isLoggedIn, isOwner, lang, userName = '' }: Props)
                     onMouseLeave={() => setHoveredId(null)}
                   >
                     {/* Action buttons shown on hover */}
-                    {canAct && isHovered && !isEditing && (
+                    {canAct && isHovered && !isEditing && resendId !== m.id && (
                       <div style={{
                         display: 'flex', gap: 4, marginBottom: 4,
                         flexDirection: alignRight ? 'row' : 'row-reverse',
@@ -489,6 +513,61 @@ export function ChatChannel({ isLoggedIn, isOwner, lang, userName = '' }: Props)
                             color: '#e53e3e', boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
                           }}
                         >🗑 {t.delete}</button>
+                        {/* Resend button — owner only, announcements only */}
+                        {isOwner && channel === 'announcements' && (
+                          <button
+                            onClick={() => { setResendId(m.id); setResendEmail(''); setResendDone(false); }}
+                            title="Gửi lại"
+                            style={{
+                              background: 'rgba(255,255,255,0.95)', border: '1px solid #bee3f8',
+                              borderRadius: 6, cursor: 'pointer', padding: '2px 8px', fontSize: 11,
+                              color: '#2b6cb0', boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                            }}
+                          >📧 Gửi lại</button>
+                        )}
+                      </div>
+                    )}
+                    {/* Resend panel — inline email input */}
+                    {resendId === m.id && !isEditing && (
+                      <div style={{
+                        maxWidth: '90%', marginBottom: 6,
+                        background: '#ebf8ff', border: '1px solid #bee3f8',
+                        borderRadius: 8, padding: '8px 10px', fontSize: 12,
+                      }}>
+                        {resendDone ? (
+                          <span style={{ color: '#2f855a', fontWeight: 600 }}>✓ Đã gửi!</span>
+                        ) : (
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <input
+                              type="email"
+                              value={resendEmail}
+                              onChange={(e) => setResendEmail(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') resendMessage(m.id); if (e.key === 'Escape') { setResendId(null); setResendEmail(''); } }}
+                              placeholder="Email người nhận..."
+                              autoFocus
+                              style={{
+                                flex: 1, border: '1px solid #bee3f8', borderRadius: 6,
+                                padding: '4px 8px', fontSize: 12, outline: 'none',
+                              }}
+                            />
+                            <button
+                              onClick={() => resendMessage(m.id)}
+                              disabled={resendSending || !resendEmail.trim()}
+                              style={{
+                                padding: '4px 10px', background: '#2b6cb0', color: '#fff',
+                                border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                                opacity: !resendEmail.trim() ? 0.5 : 1,
+                              }}
+                            >{resendSending ? '…' : 'Gửi'}</button>
+                            <button
+                              onClick={() => { setResendId(null); setResendEmail(''); }}
+                              style={{
+                                padding: '4px 8px', background: 'transparent', color: '#718096',
+                                border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer', fontSize: 11,
+                              }}
+                            >Hủy</button>
+                          </div>
+                        )}
                       </div>
                     )}
                     {/* Edit mode: inline textarea */}
