@@ -286,6 +286,7 @@ export const vi = {
     },
   },
   categories: {
+    filterLabel: 'Tất cả thể loại',
     documentary: 'Phim Tài Liệu',
     narrative: 'Phim Truyện',
     short: 'Phim Ngắn',

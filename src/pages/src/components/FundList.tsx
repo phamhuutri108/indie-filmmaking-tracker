@@ -29,6 +29,13 @@ function formatDate(d?: string): string {
   return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+const GENRE_LIST = ['documentary', 'narrative', 'short', 'feature', 'animation', 'experimental', 'student'];
+
+function parseGenres(json?: string): string[] {
+  if (!json) return [];
+  try { return JSON.parse(json) as string[]; } catch { return []; }
+}
+
 // ─── Detail Modal ─────────────────────────────────────────────────────────────
 function FundDetail({
   fund,
@@ -71,6 +78,11 @@ function FundDetail({
         {fund.type && <span style={badgeStyle('#004aad')}>{fund.type}</span>}
         {fund.focus && <span style={badgeStyle('#805ad5')}>{fund.focus}</span>}
         {fund.region_focus && <span style={badgeStyle('#38a169')}>{fund.region_focus}</span>}
+        {parseGenres(fund.genres).map((g) => (
+          <span key={g} style={badgeStyle('#319795')}>
+            {(t as any).categories?.[g] ?? g}
+          </span>
+        ))}
       </div>
 
       <section style={{ marginBottom: 16 }}>
@@ -254,6 +266,7 @@ export function FundList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [genreFilter, setGenreFilter] = useState('');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Fund | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -304,11 +317,12 @@ export function FundList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI
 
   useEffect(() => { load(); loadWatchlist(); }, []);
 
-  useEffect(() => { setPage(1); }, [search, typeFilter]);
+  useEffect(() => { setPage(1); }, [search, typeFilter, genreFilter]);
 
   const filtered = useMemo(() => {
     let list = items;
     if (typeFilter) list = list.filter((f) => f.type === typeFilter);
+    if (genreFilter) list = list.filter((f) => parseGenres(f.genres).includes(genreFilter));
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(
@@ -324,7 +338,7 @@ export function FundList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI
       if (aExp === bExp) return 0;
       return aExp ? 1 : -1;
     });
-  }, [items, typeFilter, search]);
+  }, [items, typeFilter, genreFilter, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -363,6 +377,16 @@ export function FundList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI
           <option value="">All types</option>
           {FUND_TYPES.map((c) => (
             <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+          ))}
+        </select>
+        <select
+          value={genreFilter}
+          onChange={(e) => setGenreFilter(e.target.value)}
+          style={{ ...inputStyle, width: 'auto', minWidth: 150 }}
+        >
+          <option value="">{(t as any).categories?.filterLabel ?? 'All genres'}</option>
+          {GENRE_LIST.map((g) => (
+            <option key={g} value={g}>{(t as any).categories?.[g] ?? g}</option>
           ))}
         </select>
       </div>
@@ -405,6 +429,11 @@ export function FundList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI
                     {f.type && <span style={badgeStyle('#004aad')}>{f.type}</span>}
                     {f.focus && <span style={badgeStyle('#805ad5')}>{f.focus}</span>}
                     {f.region_focus && <span style={badgeStyle('#38a169')}>{f.region_focus}</span>}
+                    {parseGenres(f.genres).slice(0, 3).map((g) => (
+                      <span key={g} style={badgeStyle('#319795')}>
+                        {(t as any).categories?.[g] ?? g}
+                      </span>
+                    ))}
                     {f.max_amount && (
                       <span style={{ fontSize: 12, fontWeight: 700, color: '#d69e2e' }}>
                         up to {formatAmount(f.max_amount, f.currency)}

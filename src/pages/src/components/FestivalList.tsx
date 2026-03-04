@@ -29,6 +29,11 @@ function formatDate(d?: string): string {
   return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+function parseGenres(json?: string): string[] {
+  if (!json) return [];
+  try { return JSON.parse(json) as string[]; } catch { return []; }
+}
+
 // ─── Section Card ─────────────────────────────────────────────────────────────
 function SectionCard({
   section,
@@ -293,6 +298,11 @@ function FestivalDetail({
             {(t as any).tiers?.[festival.tier] ?? festival.tier}
           </span>
         )}
+        {parseGenres(festival.genres).map((g) => (
+          <span key={g} style={badgeStyle('#319795')}>
+            {(t as any).categories?.[g] ?? g}
+          </span>
+        ))}
         {festival.status && (
           <span style={badgeStyle(festival.status === 'active' ? '#38a169' : '#718096')}>
             {tc.status[festival.status as 'active' | 'closed' | 'cancelled'] ?? festival.status}
@@ -585,6 +595,7 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
   const [catFilter, setCatFilter] = useState('');
   const [tierFilter, setTierFilter] = useState('');
   const [prestigeFilter, setPrestigeFilter] = useState('');
+  const [genreFilter, setGenreFilter] = useState('');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Festival | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -645,13 +656,14 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
   useEffect(() => { load(); loadWatchlist(); }, []);
 
   // Reset to page 1 whenever filters change
-  useEffect(() => { setPage(1); }, [search, catFilter, tierFilter, prestigeFilter]);
+  useEffect(() => { setPage(1); }, [search, catFilter, tierFilter, prestigeFilter, genreFilter]);
 
   const filtered = useMemo(() => {
     let list = items;
     if (tierFilter)     list = list.filter((f) => f.tier === tierFilter);
     if (catFilter)      list = list.filter((f) => f.category === catFilter);
     if (prestigeFilter) list = list.filter((f) => (f.prestige_tier ?? 'unverified') === prestigeFilter);
+    if (genreFilter) list = list.filter((f) => parseGenres(f.genres).includes(genreFilter));
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(
@@ -668,7 +680,7 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
       if (aExp === bExp) return 0;
       return aExp ? 1 : -1;
     });
-  }, [items, catFilter, tierFilter, search]);
+  }, [items, catFilter, tierFilter, search, prestigeFilter, genreFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -730,6 +742,16 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
             </option>
           ))}
         </select>
+        <select
+          value={genreFilter}
+          onChange={(e) => setGenreFilter(e.target.value)}
+          style={{ ...inputStyle, width: 'auto', minWidth: 150 }}
+        >
+          <option value="">{(t as any).categories?.filterLabel ?? 'All genres'}</option>
+          {CATEGORIES.map((g) => (
+            <option key={g} value={g}>{(t as any).categories?.[g] ?? g}</option>
+          ))}
+        </select>
       </div>
 
       {/* List */}
@@ -780,6 +802,11 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
                         {(t as any).tiers?.[f.tier] ?? f.tier}
                       </span>
                     )}
+                    {parseGenres(f.genres).slice(0, 3).map((g) => (
+                      <span key={g} style={badgeStyle('#319795')}>
+                        {(t as any).categories?.[g] ?? g}
+                      </span>
+                    ))}
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>

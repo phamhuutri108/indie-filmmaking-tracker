@@ -286,6 +286,7 @@ export const en = {
     },
   },
   categories: {
+    filterLabel: 'All genres',
     documentary: 'Documentary',
     narrative: 'Narrative',
     short: 'Short Film',
