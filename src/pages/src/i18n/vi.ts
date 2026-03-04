@@ -4,6 +4,7 @@ export const vi = {
     festivals: 'Liên hoan phim',
     funds: 'Quỹ & Tài trợ',
     education: 'Học thuật & Khu lưu trú',
+    festivalInformation: 'Thông tin Liên hoan phim',
     monitors: 'Theo dõi',
     films: 'Phim của tôi',
     submissions: 'Nộp phim',

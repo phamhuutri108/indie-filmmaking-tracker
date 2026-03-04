@@ -15,25 +15,39 @@ import { ChatChannel } from './components/ChatChannel';
 import { FestivalProfile } from './components/FestivalProfile';
 import { decodeJWT } from './apiFetch';
 
-type Tab = 'home' | 'dashboard' | 'festivals' | 'funds' | 'education' | 'monitors' | 'films' | 'submissions' | 'watchlist';
-type AppView = { type: 'tab' } | { type: 'festival-profile'; id: number };
+type Tab = 'home' | 'dashboard' | 'festivals' | 'funds' | 'education' | 'festival-information' | 'monitors' | 'films' | 'submissions' | 'watchlist';
 
-const VALID_TABS: Tab[] = ['home', 'dashboard', 'festivals', 'funds', 'education', 'monitors', 'films', 'submissions', 'watchlist'];
+const VALID_TABS: Tab[] = ['home', 'dashboard', 'festivals', 'funds', 'education', 'festival-information', 'monitors', 'films', 'submissions', 'watchlist'];
+
+function slugify(name: string): string {
+  return name.toLowerCase()
+    .replace(/[àáạảãâầấậẩẫăằắặẳẵ]/g, 'a')
+    .replace(/[èéẹẻẽêềếệểễ]/g, 'e')
+    .replace(/[ìíịỉĩ]/g, 'i')
+    .replace(/[òóọỏõôồốộổỗơờớợởỡ]/g, 'o')
+    .replace(/[ùúụủũưừứựửữ]/g, 'u')
+    .replace(/[ỳýỵỷỹ]/g, 'y')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
 
 function tabFromPath(): Tab {
   const seg = window.location.pathname.replace(/^\//, '').split('/')[0];
   if (seg === '' || seg === 'home') return 'home';
   if (seg === 'sign-in') return 'home';
-  if (seg === 'festival') return 'festivals'; // festival profile route → keep festivals tab active
+  if (seg === 'festival') return 'festival-information'; // legacy route
+  if (seg === 'festivals-information') return 'festival-information';
   return (VALID_TABS as string[]).includes(seg) ? seg as Tab : 'home';
 }
 
-function viewFromPath(): AppView {
+function festivalIdFromPath(): number | null {
   const parts = window.location.pathname.replace(/^\//, '').split('/');
-  if (parts[0] === 'festival' && parts[1] && !isNaN(Number(parts[1]))) {
-    return { type: 'festival-profile', id: Number(parts[1]) };
-  }
-  return { type: 'tab' };
+  // legacy: /festival/{id}
+  if (parts[0] === 'festival' && parts[1] && !isNaN(Number(parts[1]))) return Number(parts[1]);
+  // new: /festivals-information/{id}/{slug}
+  if (parts[0] === 'festivals-information' && parts[1] && !isNaN(Number(parts[1]))) return Number(parts[1]);
+  return null;
 }
 
 export default function App() {
@@ -41,7 +55,7 @@ export default function App() {
     () => (localStorage.getItem('ift-lang') as Lang) ?? 'vi'
   );
   const [tab, setTab] = useState<Tab>(tabFromPath);
-  const [view, setView] = useState<AppView>(viewFromPath);
+  const [selectedFestivalId, setSelectedFestivalId] = useState<number | null>(festivalIdFromPath);
   const [showUsers, setShowUsers] = useState(false);
   const [showSignIn, setShowSignIn] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -61,7 +75,7 @@ export default function App() {
     const onPop = () => {
       setShowSignIn(window.location.pathname === '/sign-in');
       setTab(tabFromPath());
-      setView(viewFromPath());
+      setSelectedFestivalId(festivalIdFromPath());
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
@@ -92,16 +106,17 @@ export default function App() {
     window.history.pushState({}, '', '/');
   };
 
-  const handleOpenFestivalProfile = (id: number) => {
-    window.history.pushState({}, '', `/festival/${id}`);
-    setTab('festivals');
-    setView({ type: 'festival-profile', id });
+  const handleOpenFestivalProfile = (id: number, name?: string) => {
+    const slug = name ? slugify(name) : String(id);
+    window.history.pushState({}, '', `/festivals-information/${id}/${slug}`);
+    setTab('festival-information');
+    setSelectedFestivalId(id);
   };
 
   const handleCloseFestivalProfile = () => {
     window.history.pushState({}, '', '/festivals');
     setTab('festivals');
-    setView({ type: 'tab' });
+    setSelectedFestivalId(null);
   };
 
   const handleAuthClose = () => {
@@ -127,8 +142,9 @@ export default function App() {
     { key: 'dashboard',   label: t.nav.dashboard },
     { key: 'festivals',   label: t.nav.festivals },
     { key: 'funds',       label: t.nav.funds },
-    { key: 'education',   label: t.nav.education },
-    { key: 'monitors',    label: t.nav.monitors },
+    { key: 'education',          label: t.nav.education },
+    { key: 'festival-information', label: t.nav.festivalInformation },
+    { key: 'monitors',           label: t.nav.monitors },
     { key: 'films',       label: t.nav.films },
     { key: 'submissions', label: t.nav.submissions },
     { key: 'watchlist',   label: t.watchlist.title },
@@ -226,7 +242,12 @@ export default function App() {
           {tabs.map(({ key, label }) => (
             <button
               key={key}
-              onClick={() => { setTab(key); window.history.pushState({}, '', key === 'home' ? '/' : `/${key}`); }}
+              onClick={() => {
+                setTab(key);
+                if (key === 'home') window.history.pushState({}, '', '/');
+                else if (key === 'festival-information') window.history.pushState({}, '', '/festivals-information');
+                else window.history.pushState({}, '', `/${key}`);
+              }}
               style={{
                 background: 'transparent',
                 color: tab === key ? '#fff' : 'rgba(255,255,255,0.6)',
@@ -253,32 +274,43 @@ export default function App() {
 
       {/* Content */}
       <main style={{
-        maxWidth: view.type === 'festival-profile' ? 'none' : tab === 'home' ? 'none' : 960,
+        maxWidth: (tab === 'festival-information' && selectedFestivalId) ? 'none' : tab === 'home' ? 'none' : 960,
         margin: '0 auto',
-        padding: view.type === 'festival-profile' ? '0' : tab === 'home' ? '0' : '28px 16px',
+        padding: (tab === 'festival-information' && selectedFestivalId) ? '0' : tab === 'home' ? '0' : '28px 16px',
       }}>
-        {view.type === 'festival-profile' ? (
-          <FestivalProfile
-            festivalId={view.id}
-            lang={lang}
-            t={t}
-            isOwner={isOwner}
-            isLoggedIn={isLoggedIn}
-            onBack={handleCloseFestivalProfile}
-          />
-        ) : (
-          <>
-            {tab === 'home'        && <Home lang={lang} />}
-            {tab === 'dashboard'   && <Dashboard t={t} isLoggedIn={isLoggedIn} />}
-            {tab === 'festivals'   && <FestivalList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} onOpenProfile={handleOpenFestivalProfile} />}
-            {tab === 'funds'       && <FundList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} />}
-            {tab === 'education'   && <EducationList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} />}
-            {tab === 'monitors'    && <MonitorList t={t} isOwner={isLoggedIn} />}
-            {tab === 'films'       && <MyFilms t={t} isOwner={isLoggedIn} />}
-            {tab === 'submissions' && <Submissions t={t} isOwner={isLoggedIn} />}
-            {tab === 'watchlist'   && <Watchlist t={t} isOwner={isLoggedIn} />}
-          </>
+        {tab === 'home'               && <Home lang={lang} />}
+        {tab === 'dashboard'          && <Dashboard t={t} isLoggedIn={isLoggedIn} />}
+        {tab === 'festivals'          && <FestivalList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} onOpenProfile={handleOpenFestivalProfile} />}
+        {tab === 'funds'              && <FundList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} />}
+        {tab === 'education'          && <EducationList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} />}
+        {tab === 'festival-information' && (
+          selectedFestivalId ? (
+            <FestivalProfile
+              festivalId={selectedFestivalId}
+              lang={lang}
+              t={t}
+              isOwner={isOwner}
+              isLoggedIn={isLoggedIn}
+              onBack={handleCloseFestivalProfile}
+            />
+          ) : (
+            <div style={{ textAlign: 'center', padding: '80px 20px', color: '#a0aec0' }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>🎬</div>
+              <p style={{ fontSize: 16, fontWeight: 600, color: '#718096' }}>
+                {lang === 'vi' ? 'Chọn một liên hoan phim để xem thông tin chi tiết' : 'Select a festival to view its full profile'}
+              </p>
+              <p style={{ fontSize: 13, marginTop: 8 }}>
+                {lang === 'vi'
+                  ? 'Bấm "View Full Profile" ở tab Liên hoan phim'
+                  : 'Click "View Full Profile →" from the Festivals tab'}
+              </p>
+            </div>
+          )
         )}
+        {tab === 'monitors'           && <MonitorList t={t} isOwner={isLoggedIn} />}
+        {tab === 'films'              && <MyFilms t={t} isOwner={isLoggedIn} />}
+        {tab === 'submissions'        && <Submissions t={t} isOwner={isLoggedIn} />}
+        {tab === 'watchlist'          && <Watchlist t={t} isOwner={isLoggedIn} />}
       </main>
 
       {/* Footer */}

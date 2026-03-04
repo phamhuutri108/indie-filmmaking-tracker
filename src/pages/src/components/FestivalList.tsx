@@ -261,7 +261,7 @@ function FestivalDetail({
   inWatchlist: boolean;
   onToggleStar: () => void;
   onSectionChanged: () => void;
-  onOpenProfile?: (id: number) => void;
+  onOpenProfile?: (id: number, name: string) => void;
 }) {
   const tf = t.festivals;
   const tc = t.common;
@@ -440,7 +440,7 @@ function FestivalDetail({
       {onOpenProfile && (
         <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #e2e8f0', textAlign: 'center' }}>
           <button
-            onClick={() => { onOpenProfile(festival.id); }}
+            onClick={() => { onOpenProfile(festival.id, festival.name); }}
             style={{ fontSize: 13, color: '#fff', background: '#004aad', border: 'none', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontWeight: 600 }}
           >
             {(t as any).festivalProfile?.viewFullProfile ?? 'View Full Profile →'}
@@ -605,7 +605,7 @@ export function FestivalList({ t, isOwner, isLoggedIn, onOpenProfile }: {
   t: ReturnType<typeof useI18n>;
   isOwner: boolean;
   isLoggedIn: boolean;
-  onOpenProfile?: (id: number) => void;
+  onOpenProfile?: (id: number, name: string) => void;
 }) {
   const [items, setItems] = useState<Festival[]>([]);
   const [loading, setLoading] = useState(true);
@@ -857,7 +857,7 @@ export function FestivalList({ t, isOwner, isLoggedIn, onOpenProfile }: {
                   )}
                   {onOpenProfile && (
                     <button
-                      onClick={(e) => { e.stopPropagation(); onOpenProfile(f.id); }}
+                      onClick={(e) => { e.stopPropagation(); onOpenProfile(f.id, f.name); }}
                       style={{ fontSize: 11, color: '#004aad', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', textDecoration: 'underline', textAlign: 'right' }}
                     >
                       {(t as any).festivalProfile?.viewFullProfile ?? 'View Full Profile →'}

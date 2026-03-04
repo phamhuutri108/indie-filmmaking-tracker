@@ -4,6 +4,7 @@ export const en = {
     festivals: 'Festivals',
     funds: 'Funds & Grants',
     education: 'Education & Residency Hub',
+    festivalInformation: 'Festival Information',
     monitors: 'Monitors',
     films: 'My Films',
     submissions: 'Submissions',
