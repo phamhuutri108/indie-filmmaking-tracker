@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useI18n } from '../i18n';
 import { apiFetch } from '../apiFetch';
 import type { Festival } from '../types';
@@ -11,7 +11,16 @@ const PRESTIGE_COLORS: Record<string, { bg: string; color: string; label: string
   'not-recommended':  { bg: '#fee2e2', color: '#991b1b', label: 'Not Recommended' },
 };
 
-// Hue from festival name for consistent avatar color
+const CATEGORY_LABELS: Record<string, string> = {
+  documentary: 'Documentary',
+  narrative: 'Narrative',
+  short: 'Short Film',
+  feature: 'Feature',
+  animation: 'Animation',
+  experimental: 'Experimental',
+  student: 'Student',
+};
+
 function nameToHue(name: string): number {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
@@ -43,42 +52,53 @@ function daysUntil(dateStr: string): number {
 
 // ─── Thumbnail ────────────────────────────────────────────────────────────────
 function FestivalThumb({ name, website }: { name: string; website?: string }) {
-  const [imgOk, setImgOk] = useState<boolean | null>(null);
+  const [imgOk, setImgOk] = useState(false);
   const domain = getDomain(website);
-  const logoUrl = domain ? `https://logo.clearbit.com/${domain}` : null;
+  // Google favicon service — free, reliable, no CORS issues
+  const faviconUrl = domain
+    ? `https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=256`
+    : null;
   const hue = nameToHue(name);
   const initials = name.split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
 
   return (
     <div style={{
       width: '100%', aspectRatio: '16/9',
-      background: `hsl(${hue},55%,90%)`,
+      background: `linear-gradient(135deg, hsl(${hue},55%,88%) 0%, hsl(${hue},45%,78%) 100%)`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       overflow: 'hidden', flexShrink: 0,
       borderRadius: '8px 8px 0 0',
+      position: 'relative',
     }}>
-      {logoUrl && imgOk !== false ? (
+      {/* Large letter avatar — always visible as background */}
+      <span style={{
+        fontSize: 36, fontWeight: 900,
+        color: `hsl(${hue},40%,35%)`,
+        letterSpacing: 2,
+        userSelect: 'none',
+        opacity: imgOk ? 0 : 1,
+        transition: 'opacity 0.2s',
+        position: 'absolute',
+      }}>
+        {initials}
+      </span>
+
+      {/* Favicon overlay — shown when loaded successfully */}
+      {faviconUrl && (
         <img
-          src={logoUrl}
-          alt={name}
+          src={faviconUrl}
+          alt=""
           onLoad={() => setImgOk(true)}
           onError={() => setImgOk(false)}
           style={{
-            maxWidth: '70%', maxHeight: '70%',
+            maxWidth: '60%', maxHeight: '60%',
             objectFit: 'contain',
-            display: imgOk === null ? 'none' : 'block',
+            opacity: imgOk ? 1 : 0,
+            transition: 'opacity 0.2s',
+            position: 'absolute',
+            imageRendering: 'auto',
           }}
         />
-      ) : null}
-      {(!logoUrl || imgOk === false) && (
-        <span style={{ fontSize: 32, fontWeight: 800, color: `hsl(${hue},45%,40%)`, letterSpacing: 2 }}>
-          {initials}
-        </span>
-      )}
-      {logoUrl && imgOk === null && (
-        <span style={{ fontSize: 32, fontWeight: 800, color: `hsl(${hue},45%,40%)`, letterSpacing: 2 }}>
-          {initials}
-        </span>
       )}
     </div>
   );
@@ -100,7 +120,7 @@ function FestivalCard({
   let deadlineBg = '#e2e8f0'; let deadlineColor = '#4a5568';
   if (deadline) {
     const d = daysUntil(deadline.date);
-    if (d <= 7) { deadlineBg = '#fed7d7'; deadlineColor = '#c53030'; }
+    if (d <= 7)  { deadlineBg = '#fed7d7'; deadlineColor = '#c53030'; }
     else if (d <= 30) { deadlineBg = '#feebc8'; deadlineColor = '#c05621'; }
     else { deadlineBg = '#c6f6d5'; deadlineColor = '#276749'; }
   }
@@ -129,24 +149,20 @@ function FestivalCard({
     >
       <FestivalThumb name={festival.name} website={festival.website} />
 
-      <div style={{ padding: '12px 14px', flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {/* Name */}
+      <div style={{ padding: '12px 14px', flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
         <div style={{ fontWeight: 700, fontSize: 13, color: '#1a202c', lineHeight: 1.35 }}>
           {lang === 'vi' && festival.name_vi ? festival.name_vi : festival.name}
         </div>
 
-        {/* Country + city */}
         {(festival.country || festival.city) && (
           <div style={{ fontSize: 11, color: '#718096' }}>
             {[festival.city, festival.country].filter(Boolean).join(', ')}
           </div>
         )}
 
-        {/* Prestige badge */}
         {prestige && (
           <span style={{
-            alignSelf: 'flex-start',
-            fontSize: 10, fontWeight: 700,
+            alignSelf: 'flex-start', fontSize: 10, fontWeight: 700,
             padding: '2px 7px', borderRadius: 10,
             background: prestige.bg, color: prestige.color,
           }}>
@@ -154,7 +170,6 @@ function FestivalCard({
           </span>
         )}
 
-        {/* Deadline */}
         <div style={{ marginTop: 'auto', paddingTop: 6 }}>
           {deadline ? (
             <span style={{
@@ -176,6 +191,26 @@ function FestivalCard({
   );
 }
 
+// ─── Filter Chip ──────────────────────────────────────────────────────────────
+function Chip({
+  label, active, onClick,
+}: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+        cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.15s',
+        background: active ? '#004aad' : '#f0f4ff',
+        color: active ? '#fff' : '#4a5568',
+        border: active ? '1px solid #004aad' : '1px solid #dbe4ff',
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 export function FestivalInformation({
   t,
@@ -193,17 +228,50 @@ export function FestivalInformation({
   const [festivals, setFestivals] = useState<Festival[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [prestige, setPrestige] = useState('');
+  const [category, setCategory] = useState('');
+  const [openOnly, setOpenOnly] = useState(false);
+  const [countryFilter, setCountryFilter] = useState('');
 
   useEffect(() => {
     if (!isLoggedIn) { setLoading(false); return; }
-    apiFetch('/api/festivals?limit=200')
+    apiFetch('/api/festivals?limit=500')
       .then(r => r.json())
       .then((data: any) => setFestivals(Array.isArray(data) ? data : (data.data ?? data.festivals ?? [])))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [isLoggedIn]);
 
-  // Guest wall
+  // Derive unique countries from data
+  const countries = useMemo(() => {
+    const set = new Set(festivals.map(f => f.country).filter(Boolean) as string[]);
+    return Array.from(set).sort();
+  }, [festivals]);
+
+  const prestigeTiers = ['a-list', 'recognized', 'credible', 'unverified', 'not-recommended'];
+  const categories = ['documentary', 'narrative', 'short', 'feature', 'animation', 'experimental', 'student'];
+
+  const filtered = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return festivals.filter(f => {
+      if (search) {
+        const q = search.toLowerCase();
+        if (!f.name.toLowerCase().includes(q) &&
+            !(f.name_vi ?? '').toLowerCase().includes(q) &&
+            !(f.country ?? '').toLowerCase().includes(q)) return false;
+      }
+      if (prestige && f.prestige_tier !== prestige) return false;
+      if (category && f.category !== category) return false;
+      if (countryFilter && f.country !== countryFilter) return false;
+      if (openOnly) {
+        const hasOpen = [f.early_deadline, f.regular_deadline, f.late_deadline].some(d => d && d >= today);
+        if (!hasOpen) return false;
+      }
+      return true;
+    });
+  }, [festivals, search, prestige, category, countryFilter, openOnly]);
+
+  // ─── Guest wall ──────────────────────────────────────────────────────────────
   if (!isLoggedIn) {
     return (
       <div style={{ textAlign: 'center', padding: '80px 20px' }}>
@@ -217,14 +285,10 @@ export function FestivalInformation({
             : 'Sign in to explore detailed festival profiles, set up monitors, and receive deadline alerts.'}
         </p>
         {onSignIn && (
-          <button
-            onClick={onSignIn}
-            style={{
-              background: '#004aad', color: '#fff', border: 'none',
-              borderRadius: 8, padding: '10px 28px',
-              fontSize: 14, fontWeight: 700, cursor: 'pointer',
-            }}
-          >
+          <button onClick={onSignIn} style={{
+            background: '#004aad', color: '#fff', border: 'none',
+            borderRadius: 8, padding: '10px 28px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+          }}>
             {lang === 'vi' ? 'Đăng nhập' : 'Sign in'}
           </button>
         )}
@@ -232,40 +296,103 @@ export function FestivalInformation({
     );
   }
 
-  const filtered = festivals.filter(f =>
-    !search ||
-    f.name.toLowerCase().includes(search.toLowerCase()) ||
-    (f.name_vi ?? '').toLowerCase().includes(search.toLowerCase()) ||
-    (f.country ?? '').toLowerCase().includes(search.toLowerCase())
-  );
+  const activeFilters = [prestige, category, countryFilter, openOnly ? 'open' : ''].filter(Boolean).length;
 
   return (
     <div style={{ padding: '28px 16px', maxWidth: 1200, margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 20 }}>
         <h2 style={{ fontSize: 22, fontWeight: 800, color: '#1a202c', marginBottom: 4 }}>
           {lang === 'vi' ? 'Thông tin Liên hoan phim' : 'Festival Information'}
         </h2>
         <p style={{ fontSize: 13, color: '#718096' }}>
           {lang === 'vi'
-            ? `${festivals.length} liên hoan phim trong cơ sở dữ liệu`
-            : `${festivals.length} festivals in the database`}
+            ? `${filtered.length} / ${festivals.length} liên hoan phim`
+            : `${filtered.length} of ${festivals.length} festivals`}
         </p>
       </div>
 
-      {/* Search */}
-      <input
-        type="text"
-        placeholder={lang === 'vi' ? 'Tìm kiếm liên hoan phim...' : 'Search festivals...'}
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        style={{
-          width: '100%', maxWidth: 420, boxSizing: 'border-box',
-          padding: '8px 14px', borderRadius: 8,
-          border: '1px solid #e2e8f0', fontSize: 13,
-          marginBottom: 24, outline: 'none',
-        }}
-      />
+      {/* Search + country */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16, alignItems: 'center' }}>
+        <input
+          type="text"
+          placeholder={lang === 'vi' ? 'Tìm kiếm tên, quốc gia...' : 'Search name, country...'}
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{
+            flex: '1 1 240px', maxWidth: 360, boxSizing: 'border-box',
+            padding: '8px 14px', borderRadius: 8,
+            border: '1px solid #e2e8f0', fontSize: 13, outline: 'none',
+          }}
+        />
+        <select
+          value={countryFilter}
+          onChange={e => setCountryFilter(e.target.value)}
+          style={{
+            padding: '8px 12px', borderRadius: 8, border: '1px solid #e2e8f0',
+            fontSize: 13, color: countryFilter ? '#1a202c' : '#a0aec0',
+            background: '#fff', cursor: 'pointer', outline: 'none',
+          }}
+        >
+          <option value="">{lang === 'vi' ? 'Tất cả quốc gia' : 'All countries'}</option>
+          {countries.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        {/* Open-only toggle */}
+        <button
+          onClick={() => setOpenOnly(v => !v)}
+          style={{
+            padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+            cursor: 'pointer', whiteSpace: 'nowrap',
+            background: openOnly ? '#004aad' : '#f0f4ff',
+            color: openOnly ? '#fff' : '#4a5568',
+            border: openOnly ? '1px solid #004aad' : '1px solid #dbe4ff',
+          }}
+        >
+          {lang === 'vi' ? '⏰ Còn deadline' : '⏰ Open deadlines'}
+        </button>
+        {activeFilters > 0 && (
+          <button
+            onClick={() => { setPrestige(''); setCategory(''); setCountryFilter(''); setOpenOnly(false); setSearch(''); }}
+            style={{
+              padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+              cursor: 'pointer', background: '#fee2e2', color: '#c53030',
+              border: '1px solid #fca5a5',
+            }}
+          >
+            {lang === 'vi' ? 'Xóa bộ lọc' : 'Clear filters'}
+          </button>
+        )}
+      </div>
+
+      {/* Prestige tier chips */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: '#a0aec0', alignSelf: 'center', marginRight: 2 }}>
+          {lang === 'vi' ? 'Uy tín:' : 'Prestige:'}
+        </span>
+        {prestigeTiers.map(p => (
+          <Chip
+            key={p}
+            label={PRESTIGE_COLORS[p]?.label ?? p}
+            active={prestige === p}
+            onClick={() => setPrestige(prestige === p ? '' : p)}
+          />
+        ))}
+      </div>
+
+      {/* Category chips */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 24 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: '#a0aec0', alignSelf: 'center', marginRight: 2 }}>
+          {lang === 'vi' ? 'Thể loại:' : 'Category:'}
+        </span>
+        {categories.map(cat => (
+          <Chip
+            key={cat}
+            label={CATEGORY_LABELS[cat] ?? cat}
+            active={category === cat}
+            onClick={() => setCategory(category === cat ? '' : cat)}
+          />
+        ))}
+      </div>
 
       {/* Grid */}
       {loading ? (
