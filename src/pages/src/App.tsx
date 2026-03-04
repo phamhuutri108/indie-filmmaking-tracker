@@ -13,6 +13,7 @@ import { AuthGate, useAuth, getAuthUserName } from './components/AuthGate';
 import { UserManager } from './components/UserManager';
 import { ChatChannel } from './components/ChatChannel';
 import { FestivalProfile } from './components/FestivalProfile';
+import { FestivalInformation } from './components/FestivalInformation';
 import { decodeJWT } from './apiFetch';
 
 type Tab = 'home' | 'dashboard' | 'festivals' | 'funds' | 'education' | 'festival-information' | 'monitors' | 'films' | 'submissions' | 'watchlist';
@@ -294,17 +295,13 @@ export default function App() {
               onBack={handleCloseFestivalProfile}
             />
           ) : (
-            <div style={{ textAlign: 'center', padding: '80px 20px', color: '#a0aec0' }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>🎬</div>
-              <p style={{ fontSize: 16, fontWeight: 600, color: '#718096' }}>
-                {lang === 'vi' ? 'Chọn một liên hoan phim để xem thông tin chi tiết' : 'Select a festival to view its full profile'}
-              </p>
-              <p style={{ fontSize: 13, marginTop: 8 }}>
-                {lang === 'vi'
-                  ? 'Bấm "View Full Profile" ở tab Liên hoan phim'
-                  : 'Click "View Full Profile →" from the Festivals tab'}
-              </p>
-            </div>
+            <FestivalInformation
+              t={t}
+              lang={lang}
+              isLoggedIn={isLoggedIn}
+              onOpenProfile={handleOpenFestivalProfile}
+              onSignIn={handleSignIn}
+            />
           )
         )}
         {tab === 'monitors'           && <MonitorList t={t} isOwner={isLoggedIn} />}
