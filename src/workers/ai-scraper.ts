@@ -40,7 +40,7 @@ Description: ${description ? description.slice(0, 400) : 'not available'}
 
 Respond with this exact JSON structure:
 {
-  "tier": "a-list" | "recognized" | "credible" | "not-recommended",
+  "tier": "a-list" | "recognized" | "credible" | "unverified" | "not-recommended",
   "signals": ["signal1", "signal2"],
   "genres": ["genre1", "genre2"]
 }
@@ -48,8 +48,9 @@ Respond with this exact JSON structure:
 Tier criteria:
 - "a-list": World-renowned, FIAPF accredited, or Oscar/BAFTA qualifying. Examples: Cannes, Venice, Sundance, IDFA, Berlinale
 - "recognized": Well-established (5+ years), industry-known, has physical screenings/events, covered by trade press
-- "credible": Legitimate festival/fund/program, smaller or newer but genuine
-- "not-recommended": No verifiable physical presence, no jury information, suspicious fee structure, likely vanity festival
+- "credible": Legitimate festival/fund/program, smaller or newer but genuine, regional focus
+- "unverified": You have insufficient information to assess credibility — use this when unsure, do NOT guess
+- "not-recommended": Clear red flags: no verifiable physical presence, no jury info, suspicious fee structure, likely vanity festival
 
 Valid signals: fiapf-accredited, oscar-qualifying, bafta-qualifying, physical-venue, long-history, industry-press, cash-prize, distribution-deal, prestigious-jury, government-backed, university-affiliated, major-fund, international-scope
 
@@ -79,7 +80,7 @@ Valid genres (only include if clearly relevant): documentary, narrative, short-f
   try {
     const parsed = JSON.parse(text) as AnalysisResult;
     return {
-      tier: ['a-list', 'recognized', 'credible', 'not-recommended'].includes(parsed.tier)
+      tier: ['a-list', 'recognized', 'credible', 'unverified', 'not-recommended'].includes(parsed.tier)
         ? parsed.tier
         : 'unverified',
       signals: Array.isArray(parsed.signals) ? parsed.signals : [],
