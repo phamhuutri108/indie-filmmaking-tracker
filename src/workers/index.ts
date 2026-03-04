@@ -9,6 +9,7 @@ import { scrapeAsianFilmFestivals } from './scraper';
 import { scrapeFunds } from './fund-scraper';
 import { generateICS, dbRowsToEvents } from './calendar';
 import { signJWT, verifyJWT, getUserFromRequest } from './auth';
+import { generateFestivalInsights } from './festival-insights';
 
 // Injected by wrangler at build time when [site] is configured
 // @ts-ignore
@@ -746,6 +747,62 @@ app.delete('/api/festival-sections/:id', async (c) => {
   if (!user || user.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
 
   await c.env.DB.prepare(`DELETE FROM festival_sections WHERE id = ?`)
+    .bind(c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+// ─── Festival Insights (AI-generated, cached) ────────────────────────────────
+app.get('/api/festivals/:id/insights', async (c) => {
+  const festivalId = Number(c.req.param('id'));
+  if (isNaN(festivalId)) return c.json({ error: 'Invalid id' }, 400);
+
+  // Return cached insights if available
+  const cached = await c.env.DB.prepare(
+    `SELECT * FROM festival_insights WHERE festival_id = ?`
+  ).bind(festivalId).first<Record<string, unknown>>();
+
+  if (cached) return c.json({ data: cached, cached: true });
+
+  // Load festival data
+  const festival = await c.env.DB.prepare(
+    `SELECT id, name, country, city, website, description, prestige_tier, category, tier
+     FROM festivals WHERE id = ?`
+  ).bind(festivalId).first<{ id: number; name: string; country: string | null; city: string | null; website: string | null; description: string | null; prestige_tier: string | null; category: string | null; tier: string | null }>();
+
+  if (!festival) return c.json({ error: 'Festival not found' }, 404);
+
+  // Generate AI profile (may take 5-10s on first call)
+  const insights = await generateFestivalInsights(festival, c.env.ANTHROPIC_API_KEY);
+
+  // Cache in DB
+  await c.env.DB.prepare(`
+    INSERT INTO festival_insights
+      (festival_id, summary, what_they_look_for, eligibility, industry_presence,
+       tips, past_selections, prizes, useful_links, acceptance_stats, confidence, model_used)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    festivalId,
+    insights.summary,
+    insights.what_they_look_for,
+    insights.eligibility,
+    insights.industry_presence,
+    insights.tips,
+    JSON.stringify(insights.past_selections),
+    JSON.stringify(insights.prizes),
+    JSON.stringify(insights.useful_links),
+    insights.acceptance_stats ? JSON.stringify(insights.acceptance_stats) : null,
+    insights.confidence,
+    'claude-sonnet-4-6',
+  ).run();
+
+  return c.json({ data: { ...insights, festival_id: festivalId }, cached: false });
+});
+
+app.delete('/api/festivals/:id/insights', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user || user.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
+
+  await c.env.DB.prepare(`DELETE FROM festival_insights WHERE festival_id = ?`)
     .bind(c.req.param('id')).run();
   return c.json({ ok: true });
 });

@@ -251,6 +251,7 @@ function FestivalDetail({
   inWatchlist,
   onToggleStar,
   onSectionChanged,
+  onOpenProfile,
 }: {
   festival: Festival;
   t: ReturnType<typeof useI18n>;
@@ -260,6 +261,7 @@ function FestivalDetail({
   inWatchlist: boolean;
   onToggleStar: () => void;
   onSectionChanged: () => void;
+  onOpenProfile?: (id: number) => void;
 }) {
   const tf = t.festivals;
   const tc = t.common;
@@ -434,6 +436,17 @@ function FestivalDetail({
           {t.festivals.source}: {festival.source}
         </p>
       )}
+
+      {onOpenProfile && (
+        <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #e2e8f0', textAlign: 'center' }}>
+          <button
+            onClick={() => { onOpenProfile(festival.id); }}
+            style={{ fontSize: 13, color: '#fff', background: '#004aad', border: 'none', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontWeight: 600 }}
+          >
+            {(t as any).festivalProfile?.viewFullProfile ?? 'View Full Profile →'}
+          </button>
+        </div>
+      )}
     </Modal>
   );
 }
@@ -588,7 +601,12 @@ function AddFestivalModal({
 // ─── Main FestivalList ────────────────────────────────────────────────────────
 const PER_PAGE = 20;
 
-export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI18n>; isOwner: boolean; isLoggedIn: boolean }) {
+export function FestivalList({ t, isOwner, isLoggedIn, onOpenProfile }: {
+  t: ReturnType<typeof useI18n>;
+  isOwner: boolean;
+  isLoggedIn: boolean;
+  onOpenProfile?: (id: number) => void;
+}) {
   const [items, setItems] = useState<Festival[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -837,6 +855,14 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
                         : formatFee(f.entry_fee_early ?? f.entry_fee_regular)}
                     </div>
                   )}
+                  {onOpenProfile && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onOpenProfile(f.id); }}
+                      style={{ fontSize: 11, color: '#004aad', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', textDecoration: 'underline', textAlign: 'right' }}
+                    >
+                      {(t as any).festivalProfile?.viewFullProfile ?? 'View Full Profile →'}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -863,6 +889,7 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
           inWatchlist={watchlistIds.has(selected.id)}
           onToggleStar={() => toggleStar({ stopPropagation: () => {} } as React.MouseEvent, selected.id)}
           onSectionChanged={() => refreshSelected(selected.id)}
+          onOpenProfile={onOpenProfile}
         />
       )}
       {showAdd && (

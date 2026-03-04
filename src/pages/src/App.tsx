@@ -12,17 +12,28 @@ import { Watchlist } from './components/Watchlist';
 import { AuthGate, useAuth, getAuthUserName } from './components/AuthGate';
 import { UserManager } from './components/UserManager';
 import { ChatChannel } from './components/ChatChannel';
+import { FestivalProfile } from './components/FestivalProfile';
 import { decodeJWT } from './apiFetch';
 
 type Tab = 'home' | 'dashboard' | 'festivals' | 'funds' | 'education' | 'monitors' | 'films' | 'submissions' | 'watchlist';
+type AppView = { type: 'tab' } | { type: 'festival-profile'; id: number };
 
 const VALID_TABS: Tab[] = ['home', 'dashboard', 'festivals', 'funds', 'education', 'monitors', 'films', 'submissions', 'watchlist'];
 
 function tabFromPath(): Tab {
   const seg = window.location.pathname.replace(/^\//, '').split('/')[0];
   if (seg === '' || seg === 'home') return 'home';
-  if (seg === 'sign-in') return 'home'; // sign-in is an overlay, not a tab
+  if (seg === 'sign-in') return 'home';
+  if (seg === 'festival') return 'festivals'; // festival profile route → keep festivals tab active
   return (VALID_TABS as string[]).includes(seg) ? seg as Tab : 'home';
+}
+
+function viewFromPath(): AppView {
+  const parts = window.location.pathname.replace(/^\//, '').split('/');
+  if (parts[0] === 'festival' && parts[1] && !isNaN(Number(parts[1]))) {
+    return { type: 'festival-profile', id: Number(parts[1]) };
+  }
+  return { type: 'tab' };
 }
 
 export default function App() {
@@ -30,6 +41,7 @@ export default function App() {
     () => (localStorage.getItem('ift-lang') as Lang) ?? 'vi'
   );
   const [tab, setTab] = useState<Tab>(tabFromPath);
+  const [view, setView] = useState<AppView>(viewFromPath);
   const [showUsers, setShowUsers] = useState(false);
   const [showSignIn, setShowSignIn] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -49,6 +61,7 @@ export default function App() {
     const onPop = () => {
       setShowSignIn(window.location.pathname === '/sign-in');
       setTab(tabFromPath());
+      setView(viewFromPath());
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
@@ -77,6 +90,18 @@ export default function App() {
     logout();
     setTab('home');
     window.history.pushState({}, '', '/');
+  };
+
+  const handleOpenFestivalProfile = (id: number) => {
+    window.history.pushState({}, '', `/festival/${id}`);
+    setTab('festivals');
+    setView({ type: 'festival-profile', id });
+  };
+
+  const handleCloseFestivalProfile = () => {
+    window.history.pushState({}, '', '/festivals');
+    setTab('festivals');
+    setView({ type: 'tab' });
   };
 
   const handleAuthClose = () => {
@@ -227,16 +252,33 @@ export default function App() {
       {isLoggedIn && <ChatChannel isLoggedIn={isLoggedIn} isOwner={isOwner} lang={lang} userName={getAuthUserName() ?? ''} />}
 
       {/* Content */}
-      <main style={{ maxWidth: tab === 'home' ? 'none' : 960, margin: '0 auto', padding: tab === 'home' ? '0' : '28px 16px' }}>
-        {tab === 'home'        && <Home lang={lang} />}
-        {tab === 'dashboard'   && <Dashboard t={t} isLoggedIn={isLoggedIn} />}
-        {tab === 'festivals'   && <FestivalList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} />}
-        {tab === 'funds'       && <FundList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} />}
-        {tab === 'education'   && <EducationList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} />}
-        {tab === 'monitors'    && <MonitorList t={t} isOwner={isLoggedIn} />}
-        {tab === 'films'       && <MyFilms t={t} isOwner={isLoggedIn} />}
-        {tab === 'submissions' && <Submissions t={t} isOwner={isLoggedIn} />}
-        {tab === 'watchlist'   && <Watchlist t={t} isOwner={isLoggedIn} />}
+      <main style={{
+        maxWidth: view.type === 'festival-profile' ? 'none' : tab === 'home' ? 'none' : 960,
+        margin: '0 auto',
+        padding: view.type === 'festival-profile' ? '0' : tab === 'home' ? '0' : '28px 16px',
+      }}>
+        {view.type === 'festival-profile' ? (
+          <FestivalProfile
+            festivalId={view.id}
+            lang={lang}
+            t={t}
+            isOwner={isOwner}
+            isLoggedIn={isLoggedIn}
+            onBack={handleCloseFestivalProfile}
+          />
+        ) : (
+          <>
+            {tab === 'home'        && <Home lang={lang} />}
+            {tab === 'dashboard'   && <Dashboard t={t} isLoggedIn={isLoggedIn} />}
+            {tab === 'festivals'   && <FestivalList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} onOpenProfile={handleOpenFestivalProfile} />}
+            {tab === 'funds'       && <FundList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} />}
+            {tab === 'education'   && <EducationList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} />}
+            {tab === 'monitors'    && <MonitorList t={t} isOwner={isLoggedIn} />}
+            {tab === 'films'       && <MyFilms t={t} isOwner={isLoggedIn} />}
+            {tab === 'submissions' && <Submissions t={t} isOwner={isLoggedIn} />}
+            {tab === 'watchlist'   && <Watchlist t={t} isOwner={isLoggedIn} />}
+          </>
+        )}
       </main>
 
       {/* Footer */}

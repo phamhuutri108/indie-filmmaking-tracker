@@ -1,3 +1,53 @@
+// ─── Festival Insights (AI-generated profile) ─────────────────────────────────
+
+export interface PastFilm {
+  year: number;
+  title: string;
+  director: string;
+  country?: string;
+  award?: string | null;
+  imdb_url?: string | null;
+  letterboxd_url?: string | null;
+  notes?: string;
+}
+
+export interface FestivalPrize {
+  name: string;
+  amount_usd?: number | null;
+  description?: string;
+}
+
+export interface UsefulLink {
+  label: string;
+  url: string;
+  type: 'official' | 'wiki' | 'imdb' | 'letterboxd' | 'press' | 'other';
+}
+
+export interface AcceptanceStat {
+  submissions?: number;
+  selected?: number;
+  rate_pct?: number;
+  note?: string;
+}
+
+export interface FestivalInsights {
+  festival_id: number;
+  confidence: 'high' | 'medium' | 'low';
+  summary?: string;
+  what_they_look_for?: string;
+  eligibility?: string;
+  industry_presence?: string;
+  tips?: string;
+  past_selections: PastFilm[];
+  prizes: FestivalPrize[];
+  useful_links: UsefulLink[];
+  acceptance_stats: AcceptanceStat | null;
+  generated_at?: string;
+  model_used?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export interface FestivalSection {
   id: number;
   festival_id: number;
