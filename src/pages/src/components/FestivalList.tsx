@@ -3,7 +3,7 @@ import { useI18n } from '../i18n';
 import { apiFetch } from '../apiFetch';
 import { DeadlineBadge, daysUntil } from './DeadlineBadge';
 import { Modal, inputStyle, labelStyle, formRowStyle, formGridStyle } from './Modal';
-import type { Festival } from '../types';
+import type { Festival, FestivalSection } from '../types';
 
 const API_BASE = '/api';
 
@@ -29,21 +29,232 @@ function formatDate(d?: string): string {
   return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+// ─── Section Card ─────────────────────────────────────────────────────────────
+function SectionCard({
+  section,
+  t,
+  isOwner,
+  onDeleted,
+}: {
+  section: FestivalSection;
+  t: ReturnType<typeof useI18n>;
+  isOwner: boolean;
+  onDeleted: (id: number) => void;
+}) {
+  const ts = (t as any).sections ?? {};
+  const displayName =
+    section.section_name === 'General'
+      ? (ts.general ?? 'General Submissions')
+      : section.section_name;
+
+  const deleteSection = async () => {
+    if (!confirm(`${ts.deleteSection ?? 'Delete section'} "${section.section_name}"?`)) return;
+    try {
+      await fetch(`${API_BASE}/festival-sections/${section.id}`, { method: 'DELETE' });
+      onDeleted(section.id);
+    } catch {}
+  };
+
+  return (
+    <div style={{ padding: '10px 12px', background: '#f7fafc', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <strong style={{ fontSize: 13, color: '#2d3748' }}>{displayName}</strong>
+          {section.category && (
+            <span style={badgeStyle('#004aad')}>
+              {(t as any).categories?.[section.category] ?? section.category}
+            </span>
+          )}
+        </div>
+        {isOwner && (
+          <button
+            onClick={deleteSection}
+            title={ts.deleteSection ?? 'Delete'}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e53e3e', fontSize: 14, lineHeight: 1, padding: '0 2px' }}
+          >
+            ×
+          </button>
+        )}
+      </div>
+      <div style={{ display: 'grid', gap: 4 }}>
+        {section.early_deadline && (
+          <div style={{ fontSize: 12, color: '#718096', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ minWidth: 70 }}>{ts.earlyDeadline ?? 'Early'}:</span>
+            <DeadlineBadge deadline={section.early_deadline} t={t} />
+            <span>{formatDate(section.early_deadline)}</span>
+            {section.entry_fee_early != null && (
+              <span style={{ color: '#4a5568', fontWeight: 600 }}>{formatFee(section.entry_fee_early)}</span>
+            )}
+          </div>
+        )}
+        {section.regular_deadline && (
+          <div style={{ fontSize: 12, color: '#718096', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ minWidth: 70 }}>{ts.regularDeadline ?? 'Regular'}:</span>
+            <DeadlineBadge deadline={section.regular_deadline} t={t} />
+            <span>{formatDate(section.regular_deadline)}</span>
+            {section.entry_fee_regular != null && (
+              <span style={{ color: '#4a5568', fontWeight: 600 }}>{formatFee(section.entry_fee_regular)}</span>
+            )}
+          </div>
+        )}
+        {section.late_deadline && (
+          <div style={{ fontSize: 12, color: '#718096', display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span style={{ minWidth: 70 }}>{ts.lateDeadline ?? 'Late'}:</span>
+            <span>{formatDate(section.late_deadline)}</span>
+          </div>
+        )}
+        {section.filmfreeway_url && (
+          <a href={section.filmfreeway_url} target="_blank" rel="noreferrer"
+            style={{ fontSize: 12, color: '#e53e3e', textDecoration: 'none', marginTop: 2 }}>
+            FilmFreeway ↗
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Add Section Form ──────────────────────────────────────────────────────────
+type SectionForm = {
+  section_name: string; section_name_vi: string; category: string;
+  early_deadline: string; regular_deadline: string; late_deadline: string;
+  entry_fee_early: string; entry_fee_regular: string; filmfreeway_url: string;
+};
+const emptySectionForm = (): SectionForm => ({
+  section_name: '', section_name_vi: '', category: '',
+  early_deadline: '', regular_deadline: '', late_deadline: '',
+  entry_fee_early: '', entry_fee_regular: '', filmfreeway_url: '',
+});
+
+function AddSectionInline({
+  festivalId,
+  t,
+  onSaved,
+}: {
+  festivalId: number;
+  t: ReturnType<typeof useI18n>;
+  onSaved: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<SectionForm>(emptySectionForm());
+  const [saving, setSaving] = useState(false);
+  const ts = (t as any).sections ?? {};
+
+  const set = (k: keyof SectionForm) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const submit = async () => {
+    if (!form.section_name.trim()) return;
+    setSaving(true);
+    try {
+      const body: Record<string, unknown> = { festival_id: festivalId, ...form };
+      if (form.entry_fee_early) body.entry_fee_early = Math.round(Number(form.entry_fee_early) * 100);
+      if (form.entry_fee_regular) body.entry_fee_regular = Math.round(Number(form.entry_fee_regular) * 100);
+      delete (body as any).entry_fee_early_str;
+      delete (body as any).entry_fee_regular_str;
+      const res = await fetch(`${API_BASE}/festival-sections`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error();
+      onSaved();
+      setOpen(false);
+      setForm(emptySectionForm());
+    } catch {}
+    finally { setSaving(false); }
+  };
+
+  if (!open) {
+    return (
+      <div style={{ marginTop: 10 }}>
+        <button onClick={() => setOpen(true)} style={{ ...btnSecondary, fontSize: 13, padding: '6px 12px' }}>
+          + {ts.addSection ?? 'Add Section'}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 12, padding: 14, background: '#f7fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+      <div style={{ ...sectionLabel, marginBottom: 12 }}>{ts.addSection ?? 'Add Section'}</div>
+      <div style={formGridStyle}>
+        <div style={formRowStyle}>
+          <label style={labelStyle}>{ts.sectionName ?? 'Section Name *'}</label>
+          <input style={inputStyle} value={form.section_name} onChange={set('section_name')} />
+        </div>
+        <div style={formRowStyle}>
+          <label style={labelStyle}>{ts.sectionNameVi ?? 'Section Name (VI)'}</label>
+          <input style={inputStyle} value={form.section_name_vi} onChange={set('section_name_vi')} />
+        </div>
+        <div style={formRowStyle}>
+          <label style={labelStyle}>{ts.category ?? 'Category'}</label>
+          <select style={inputStyle} value={form.category} onChange={set('category')}>
+            <option value="">—</option>
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>{(t as any).categories?.[c] ?? c}</option>
+            ))}
+          </select>
+        </div>
+        <div />
+        <div style={formRowStyle}>
+          <label style={labelStyle}>{ts.earlyDeadline ?? 'Early Deadline'}</label>
+          <input style={inputStyle} type="date" value={form.early_deadline} onChange={set('early_deadline')} />
+        </div>
+        <div style={formRowStyle}>
+          <label style={labelStyle}>{ts.regularDeadline ?? 'Regular Deadline'}</label>
+          <input style={inputStyle} type="date" value={form.regular_deadline} onChange={set('regular_deadline')} />
+        </div>
+        <div style={formRowStyle}>
+          <label style={labelStyle}>{ts.lateDeadline ?? 'Late Deadline'}</label>
+          <input style={inputStyle} type="date" value={form.late_deadline} onChange={set('late_deadline')} />
+        </div>
+        <div />
+        <div style={formRowStyle}>
+          <label style={labelStyle}>{ts.entryFeeEarly ?? 'Entry Fee Early (USD)'}</label>
+          <input style={inputStyle} type="number" min={0} value={form.entry_fee_early} onChange={set('entry_fee_early')} placeholder="0" />
+        </div>
+        <div style={formRowStyle}>
+          <label style={labelStyle}>{ts.entryFeeRegular ?? 'Entry Fee Regular (USD)'}</label>
+          <input style={inputStyle} type="number" min={0} value={form.entry_fee_regular} onChange={set('entry_fee_regular')} placeholder="0" />
+        </div>
+        <div style={formRowStyle}>
+          <label style={labelStyle}>{ts.filmfreeway ?? 'FilmFreeway URL'}</label>
+          <input style={inputStyle} type="url" value={form.filmfreeway_url} onChange={set('filmfreeway_url')} placeholder="https://filmfreeway.com/..." />
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <button onClick={() => { setOpen(false); setForm(emptySectionForm()); }} style={btnSecondary}>
+          {t.common.cancel}
+        </button>
+        <button onClick={submit} disabled={saving || !form.section_name.trim()} style={btnPrimary}>
+          {saving ? '...' : t.common.save}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Detail Modal ─────────────────────────────────────────────────────────────
 function FestivalDetail({
   festival,
   t,
   onClose,
+  isOwner,
   isLoggedIn,
   inWatchlist,
   onToggleStar,
+  onSectionChanged,
 }: {
   festival: Festival;
   t: ReturnType<typeof useI18n>;
   onClose: () => void;
+  isOwner: boolean;
   isLoggedIn: boolean;
   inWatchlist: boolean;
   onToggleStar: () => void;
+  onSectionChanged: () => void;
 }) {
   const tf = t.festivals;
   const tc = t.common;
@@ -158,6 +369,33 @@ function FestivalDetail({
           </div>
         </section>
       )}
+
+      {/* Sections */}
+      {(festival.sections && festival.sections.length > 0) || isOwner ? (
+        <section style={{ marginBottom: 18 }}>
+          <div style={sectionLabel}>🎬 {(t as any).sections?.title ?? 'Sections'}</div>
+          {festival.sections && festival.sections.length > 0 ? (
+            <div style={{ display: 'grid', gap: 8 }}>
+              {festival.sections.map((sec) => (
+                <SectionCard
+                  key={sec.id}
+                  section={sec}
+                  t={t}
+                  isOwner={isOwner}
+                  onDeleted={onSectionChanged}
+                />
+              ))}
+            </div>
+          ) : (
+            <p style={{ fontSize: 13, color: '#a0aec0', margin: '0 0 8px' }}>
+              {(t as any).sections?.noSections ?? 'No sections yet.'}
+            </p>
+          )}
+          {isOwner && (
+            <AddSectionInline festivalId={festival.id} t={t} onSaved={onSectionChanged} />
+          )}
+        </section>
+      ) : null}
 
       {/* Description */}
       {festival.description && (
@@ -387,6 +625,23 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
     }
   };
 
+  const openDetail = async (f: Festival) => {
+    setSelected(f); // show modal immediately with basic data
+    try {
+      const res = await fetch(`${API_BASE}/festivals/${f.id}`);
+      const { data } = await res.json() as { data: Festival };
+      setSelected(data);
+    } catch {}
+  };
+
+  const refreshSelected = async (id: number) => {
+    try {
+      const res = await fetch(`${API_BASE}/festivals/${id}`);
+      const { data } = await res.json() as { data: Festival };
+      setSelected(data);
+    } catch {}
+  };
+
   useEffect(() => { load(); loadWatchlist(); }, []);
 
   // Reset to page 1 whenever filters change
@@ -489,7 +744,7 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
           {paginated.map((f) => (
             <div
               key={f.id}
-              onClick={() => setSelected(f)}
+              onClick={() => openDetail(f)}
               style={{
                 border: '1px solid #e2e8f0',
                 borderRadius: 8,
@@ -576,9 +831,11 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
           festival={selected}
           t={t}
           onClose={() => setSelected(null)}
+          isOwner={isOwner}
           isLoggedIn={isLoggedIn}
           inWatchlist={watchlistIds.has(selected.id)}
           onToggleStar={() => toggleStar({ stopPropagation: () => {} } as React.MouseEvent, selected.id)}
+          onSectionChanged={() => refreshSelected(selected.id)}
         />
       )}
       {showAdd && (

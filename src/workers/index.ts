@@ -688,9 +688,66 @@ app.get('/api/festivals', async (c) => {
 });
 
 app.get('/api/festivals/:id', async (c) => {
-  const row = await c.env.DB.prepare(`SELECT * FROM festivals WHERE id = ?`)
+  const festival = await c.env.DB.prepare(`SELECT * FROM festivals WHERE id = ?`)
     .bind(c.req.param('id')).first();
-  return row ? c.json({ data: row }) : c.json({ error: 'Not found' }, 404);
+  if (!festival) return c.json({ error: 'Not found' }, 404);
+
+  const sections = await c.env.DB.prepare(
+    `SELECT * FROM festival_sections WHERE festival_id = ? ORDER BY regular_deadline ASC`
+  ).bind(c.req.param('id')).all();
+
+  return c.json({ data: { ...festival, sections: sections.results } });
+});
+
+// ─── Festival Sections ────────────────────────────────────────────────────────
+app.post('/api/festival-sections', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user || user.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
+
+  const body = await c.req.json<Record<string, unknown>>();
+  const {
+    festival_id, section_name, section_name_vi, category,
+    early_deadline, regular_deadline, late_deadline,
+    entry_fee_early, entry_fee_regular, filmfreeway_url, notification_date,
+  } = body as any;
+
+  if (!festival_id || !section_name) return c.json({ error: 'festival_id and section_name required' }, 400);
+
+  const result = await c.env.DB.prepare(
+    `INSERT INTO festival_sections
+       (festival_id, section_name, section_name_vi, category,
+        early_deadline, regular_deadline, late_deadline,
+        entry_fee_early, entry_fee_regular, filmfreeway_url,
+        notification_date, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual')
+     ON CONFLICT(festival_id, section_name) DO UPDATE SET
+       section_name_vi = excluded.section_name_vi,
+       category = excluded.category,
+       early_deadline = excluded.early_deadline,
+       regular_deadline = excluded.regular_deadline,
+       late_deadline = excluded.late_deadline,
+       entry_fee_early = excluded.entry_fee_early,
+       entry_fee_regular = excluded.entry_fee_regular,
+       filmfreeway_url = excluded.filmfreeway_url,
+       notification_date = excluded.notification_date`
+  ).bind(
+    festival_id, section_name, section_name_vi ?? null, category ?? null,
+    early_deadline ?? null, regular_deadline ?? null, late_deadline ?? null,
+    entry_fee_early ? Math.round(Number(entry_fee_early) * 100) : null,
+    entry_fee_regular ? Math.round(Number(entry_fee_regular) * 100) : null,
+    filmfreeway_url ?? null, notification_date ?? null,
+  ).run();
+
+  return c.json({ id: result.meta.last_row_id }, 201);
+});
+
+app.delete('/api/festival-sections/:id', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user || user.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
+
+  await c.env.DB.prepare(`DELETE FROM festival_sections WHERE id = ?`)
+    .bind(c.req.param('id')).run();
+  return c.json({ ok: true });
 });
 
 app.post('/api/festivals', async (c) => {

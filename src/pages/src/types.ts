@@ -1,3 +1,21 @@
+export interface FestivalSection {
+  id: number;
+  festival_id: number;
+  section_name: string;
+  section_name_vi?: string;
+  category?: string;
+  early_deadline?: string;
+  regular_deadline?: string;
+  late_deadline?: string;
+  entry_fee_early?: number;
+  entry_fee_regular?: number;
+  entry_fee_late?: number;
+  filmfreeway_url?: string;
+  notification_date?: string;
+  status?: string;
+  source?: string;
+}
+
 export interface Festival {
   id: number;
   name: string;
@@ -23,6 +41,7 @@ export interface Festival {
   prestige_tier?: string;     // 'a-list' | 'recognized' | 'credible' | 'unverified' | 'not-recommended'
   prestige_signals?: string;  // JSON string array
   genres?: string;            // JSON string array
+  sections?: FestivalSection[];
 }
 
 export interface Fund {

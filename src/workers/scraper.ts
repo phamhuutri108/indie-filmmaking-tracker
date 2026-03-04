@@ -396,9 +396,27 @@ export async function saveFestivals(
         .bind(f.name, f.regular_deadline, f.regular_deadline)
         .first<{ id: number }>();
 
-      if (existing) { skipped++; continue; }
+      if (existing) {
+        // Festival đã tồn tại — cập nhật section "General" nếu cần
+        await db.prepare(`
+          INSERT INTO festival_sections
+            (festival_id, section_name, category, early_deadline, regular_deadline,
+             filmfreeway_url, notification_date, source)
+          VALUES (?, 'General', ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(festival_id, section_name) DO UPDATE SET
+            category = excluded.category,
+            early_deadline = excluded.early_deadline,
+            regular_deadline = excluded.regular_deadline,
+            filmfreeway_url = COALESCE(excluded.filmfreeway_url, filmfreeway_url)
+        `).bind(
+          existing.id, f.category, f.early_deadline, f.regular_deadline,
+          f.filmfreeway_url, f.notification_date, f.source
+        ).run();
+        skipped++;
+        continue;
+      }
 
-      await db
+      const insertResult = await db
         .prepare(
           `INSERT INTO festivals
              (name, country, website, filmfreeway_url, category,
@@ -412,6 +430,18 @@ export async function saveFestivals(
           f.festival_dates, f.description, f.source
         )
         .run();
+
+      // Tạo section "General" cho festival mới
+      const festivalId = insertResult.meta.last_row_id;
+      await db.prepare(`
+        INSERT OR IGNORE INTO festival_sections
+          (festival_id, section_name, category, early_deadline, regular_deadline,
+           filmfreeway_url, notification_date, source)
+        VALUES (?, 'General', ?, ?, ?, ?, ?, ?)
+      `).bind(
+        festivalId, f.category, f.early_deadline, f.regular_deadline,
+        f.filmfreeway_url, f.notification_date, f.source
+      ).run();
 
       saved++;
     } catch (err) {
