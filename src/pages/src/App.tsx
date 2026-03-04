@@ -5,20 +5,17 @@ import { Dashboard } from './components/Dashboard';
 import { FestivalList } from './components/FestivalList';
 import { FundList } from './components/FundList';
 import { EducationList } from './components/EducationList';
-import { MonitorList } from './components/MonitorList';
-import { MyFilms } from './components/MyFilms';
-import { Submissions } from './components/Submissions';
-import { Watchlist } from './components/Watchlist';
 import { AuthGate, useAuth, getAuthUserName } from './components/AuthGate';
 import { UserManager } from './components/UserManager';
 import { ChatChannel } from './components/ChatChannel';
 import { FestivalProfile } from './components/FestivalProfile';
 import { FestivalInformation } from './components/FestivalInformation';
+import { UserHub } from './components/UserHub';
 import { decodeJWT } from './apiFetch';
 
-type Tab = 'home' | 'dashboard' | 'festivals' | 'funds' | 'education' | 'festival-information' | 'monitors' | 'films' | 'submissions' | 'watchlist';
+type Tab = 'home' | 'dashboard' | 'festivals' | 'funds' | 'education' | 'festival-information' | 'user';
 
-const VALID_TABS: Tab[] = ['home', 'dashboard', 'festivals', 'funds', 'education', 'festival-information', 'monitors', 'films', 'submissions', 'watchlist'];
+const VALID_TABS: Tab[] = ['home', 'dashboard', 'festivals', 'funds', 'education', 'festival-information', 'user'];
 
 function slugify(name: string): string {
   return name.toLowerCase()
@@ -39,6 +36,9 @@ function tabFromPath(): Tab {
   if (seg === 'sign-in') return 'home';
   if (seg === 'festival') return 'festival-information'; // legacy route
   if (seg === 'festivals-information') return 'festival-information';
+  if (seg === 'user') return 'user';
+  // legacy sub-tabs now live under /user
+  if (['monitors', 'films', 'your-films', 'submissions', 'watchlist'].includes(seg)) return 'user';
   return (VALID_TABS as string[]).includes(seg) ? seg as Tab : 'home';
 }
 
@@ -122,7 +122,10 @@ export default function App() {
 
   const handleAuthClose = () => {
     setShowSignIn(false);
-    window.history.replaceState({}, '', tab === 'home' ? '/' : `/${tab}`);
+    if (tab === 'home') window.history.replaceState({}, '', '/');
+    else if (tab === 'festival-information') window.history.replaceState({}, '', '/festivals-information');
+    else if (tab === 'user') window.history.replaceState({}, '', window.location.pathname);
+    else window.history.replaceState({}, '', `/${tab}`);
   };
 
   const handleAuth = (newRole: import('./components/AuthGate').Role, token?: string) => {
@@ -145,10 +148,7 @@ export default function App() {
     { key: 'funds',       label: t.nav.funds },
     { key: 'education',          label: t.nav.education },
     { key: 'festival-information', label: t.nav.festivalInformation },
-    { key: 'monitors',           label: t.nav.monitors },
-    { key: 'films',       label: t.nav.films },
-    { key: 'submissions', label: t.nav.submissions },
-    { key: 'watchlist',   label: t.watchlist.title },
+    { key: 'user',                 label: (t.nav as any).user ?? 'User' },
   ];
 
   const roleBadge =
@@ -247,6 +247,7 @@ export default function App() {
                 setTab(key);
                 if (key === 'home') window.history.pushState({}, '', '/');
                 else if (key === 'festival-information') window.history.pushState({}, '', '/festivals-information');
+                else if (key === 'user') window.history.pushState({}, '', '/user/monitors');
                 else window.history.pushState({}, '', `/${key}`);
               }}
               style={{
@@ -275,9 +276,9 @@ export default function App() {
 
       {/* Content */}
       <main style={{
-        maxWidth: (tab === 'festival-information' && selectedFestivalId) ? 'none' : tab === 'home' ? 'none' : 960,
+        maxWidth: (tab === 'festival-information' && selectedFestivalId) || tab === 'user' ? 'none' : tab === 'home' ? 'none' : 960,
         margin: '0 auto',
-        padding: (tab === 'festival-information' && selectedFestivalId) ? '0' : tab === 'home' ? '0' : '28px 16px',
+        padding: (tab === 'festival-information' && selectedFestivalId) || tab === 'user' || tab === 'home' ? '0' : '28px 16px',
       }}>
         {tab === 'home'               && <Home lang={lang} />}
         {tab === 'dashboard'          && <Dashboard t={t} isLoggedIn={isLoggedIn} />}
@@ -304,10 +305,15 @@ export default function App() {
             />
           )
         )}
-        {tab === 'monitors'           && <MonitorList t={t} isOwner={isLoggedIn} />}
-        {tab === 'films'              && <MyFilms t={t} isOwner={isLoggedIn} />}
-        {tab === 'submissions'        && <Submissions t={t} isOwner={isLoggedIn} />}
-        {tab === 'watchlist'          && <Watchlist t={t} isOwner={isLoggedIn} />}
+        {tab === 'user' && (
+          <UserHub
+            t={t}
+            lang={lang}
+            isLoggedIn={isLoggedIn}
+            isOwner={isOwner}
+            onSignIn={handleSignIn}
+          />
+        )}
       </main>
 
       {/* Footer */}

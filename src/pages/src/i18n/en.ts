@@ -5,9 +5,11 @@ export const en = {
     funds: 'Funds & Grants',
     education: 'Education & Residency Hub',
     festivalInformation: 'Festival Information',
+    user: 'User',
     monitors: 'Monitors',
-    films: 'My Films',
+    yourFilms: 'Your Films',
     submissions: 'Submissions',
+    watchlist: 'Watchlist',
   },
   dashboard: {
     title: 'Film Intelligence Dashboard',

@@ -5,9 +5,11 @@ export const vi = {
     funds: 'Quỹ & Tài trợ',
     education: 'Học thuật & Khu lưu trú',
     festivalInformation: 'Thông tin Liên hoan phim',
+    user: 'Người dùng',
     monitors: 'Theo dõi',
-    films: 'Phim của tôi',
+    yourFilms: 'Phim của tôi',
     submissions: 'Nộp phim',
+    watchlist: 'Yêu thích',
   },
   dashboard: {
     title: 'Bảng điều khiển Film Intelligence',
