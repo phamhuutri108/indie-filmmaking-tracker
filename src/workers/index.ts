@@ -25,6 +25,7 @@ export interface Env {
   GOOGLE_CLIENT_SECRET: string;
   JWT_SECRET: string;
   OWNER_PASSWORD: string;
+  ANTHROPIC_API_KEY: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -665,13 +666,14 @@ app.get('/api/cron/run', async (c) => {
 // MODULE 1: Festivals (global — no user scoping)
 // ============================================================
 app.get('/api/festivals', async (c) => {
-  const { category, tier, status = 'active', limit = '500', offset = '0', search } = c.req.query();
+  const { category, tier, prestige_tier, status = 'active', limit = '500', offset = '0', search } = c.req.query();
 
   let query = `SELECT * FROM festivals WHERE status = ?`;
   const params: unknown[] = [status];
 
-  if (category) { query += ` AND category = ?`; params.push(category); }
-  if (tier)     { query += ` AND tier = ?`;     params.push(tier); }
+  if (category)      { query += ` AND category = ?`;      params.push(category); }
+  if (tier)          { query += ` AND tier = ?`;           params.push(tier); }
+  if (prestige_tier) { query += ` AND prestige_tier = ?`;  params.push(prestige_tier); }
   if (search) {
     query += ` AND (name LIKE ? OR country LIKE ? OR city LIKE ?)`;
     const like = `%${search}%`;

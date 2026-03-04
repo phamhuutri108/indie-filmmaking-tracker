@@ -7,8 +7,17 @@ import type { Festival } from '../types';
 
 const API_BASE = '/api';
 
-const CATEGORIES = ['documentary', 'narrative', 'short', 'animation', 'experimental'];
+const CATEGORIES = ['documentary', 'narrative', 'short', 'feature', 'animation', 'experimental', 'student'];
 const TIERS = ['A-list', 'regional', 'emerging'];
+const PRESTIGE_TIERS = ['a-list', 'recognized', 'credible', 'unverified', 'not-recommended'] as const;
+
+const PRESTIGE_COLORS: Record<string, string> = {
+  'a-list': '#d69e2e',
+  recognized: '#38a169',
+  credible: '#004aad',
+  unverified: '#718096',
+  'not-recommended': '#e53e3e',
+};
 
 function formatFee(cents?: number): string {
   if (!cents) return '—';
@@ -58,11 +67,20 @@ function FestivalDetail({
 
       {/* Badges */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+        {festival.prestige_tier && (
+          <span style={badgeStyle(PRESTIGE_COLORS[festival.prestige_tier] ?? '#718096')}>
+            {(t as any).prestige?.[festival.prestige_tier] ?? festival.prestige_tier}
+          </span>
+        )}
         {festival.category && (
-          <span style={badgeStyle('#004aad')}>{festival.category}</span>
+          <span style={badgeStyle('#004aad')}>
+            {(t as any).categories?.[festival.category] ?? festival.category}
+          </span>
         )}
         {festival.tier && (
-          <span style={badgeStyle('#805ad5')}>{festival.tier}</span>
+          <span style={badgeStyle('#805ad5')}>
+            {(t as any).tiers?.[festival.tier] ?? festival.tier}
+          </span>
         )}
         {festival.status && (
           <span style={badgeStyle(festival.status === 'active' ? '#38a169' : '#718096')}>
@@ -70,6 +88,23 @@ function FestivalDetail({
           </span>
         )}
       </div>
+
+      {/* Prestige signals */}
+      {festival.prestige_signals && (() => {
+        try {
+          const signals: string[] = JSON.parse(festival.prestige_signals);
+          if (signals.length === 0) return null;
+          return (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+              {signals.map((s) => (
+                <span key={s} style={{ fontSize: 11, background: '#f7fafc', border: '1px solid #e2e8f0', borderRadius: 4, padding: '2px 8px', color: '#4a5568' }}>
+                  {(t as any).prestige?.signals?.[s] ?? s}
+                </span>
+              ))}
+            </div>
+          );
+        } catch { return null; }
+      })()}
 
       {/* Deadlines */}
       <section style={{ marginBottom: 18 }}>
@@ -311,6 +346,7 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('');
   const [tierFilter, setTierFilter] = useState('');
+  const [prestigeFilter, setPrestigeFilter] = useState('');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Festival | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -354,12 +390,13 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
   useEffect(() => { load(); loadWatchlist(); }, []);
 
   // Reset to page 1 whenever filters change
-  useEffect(() => { setPage(1); }, [search, catFilter, tierFilter]);
+  useEffect(() => { setPage(1); }, [search, catFilter, tierFilter, prestigeFilter]);
 
   const filtered = useMemo(() => {
     let list = items;
-    if (tierFilter) list = list.filter((f) => f.tier === tierFilter);
-    if (catFilter) list = list.filter((f) => f.category === catFilter);
+    if (tierFilter)     list = list.filter((f) => f.tier === tierFilter);
+    if (catFilter)      list = list.filter((f) => f.category === catFilter);
+    if (prestigeFilter) list = list.filter((f) => (f.prestige_tier ?? 'unverified') === prestigeFilter);
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(
@@ -421,7 +458,21 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
         >
           <option value="">All categories</option>
           {CATEGORIES.map((c) => (
-            <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+            <option key={c} value={c}>
+              {(t as any).categories?.[c] ?? c.charAt(0).toUpperCase() + c.slice(1)}
+            </option>
+          ))}
+        </select>
+        <select
+          value={prestigeFilter}
+          onChange={(e) => setPrestigeFilter(e.target.value)}
+          style={{ ...inputStyle, width: 'auto', minWidth: 170 }}
+        >
+          <option value="">{(t as any).prestige?.filterLabel ?? 'All credibility'}</option>
+          {PRESTIGE_TIERS.map((p) => (
+            <option key={p} value={p}>
+              {(t as any).prestige?.[p] ?? p}
+            </option>
           ))}
         </select>
       </div>
@@ -459,8 +510,21 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
                     </span>
                   )}
                   <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {f.category && <span style={badgeStyle('#004aad')}>{f.category}</span>}
-                    {f.tier && <span style={badgeStyle('#805ad5')}>{f.tier}</span>}
+                    {f.prestige_tier && f.prestige_tier !== 'unverified' && (
+                      <span style={badgeStyle(PRESTIGE_COLORS[f.prestige_tier] ?? '#718096')}>
+                        {(t as any).prestige?.[f.prestige_tier] ?? f.prestige_tier}
+                      </span>
+                    )}
+                    {f.category && (
+                      <span style={badgeStyle('#004aad')}>
+                        {(t as any).categories?.[f.category] ?? f.category}
+                      </span>
+                    )}
+                    {f.tier && (
+                      <span style={badgeStyle('#805ad5')}>
+                        {(t as any).tiers?.[f.tier] ?? f.tier}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
@@ -481,6 +545,14 @@ export function FestivalList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof 
                   {f.regular_deadline && (
                     <div style={{ fontSize: 12, color: '#718096' }}>
                       {t.festivals.regularDeadline}: <DeadlineBadge deadline={f.regular_deadline} t={t} />
+                    </div>
+                  )}
+                  {(f.entry_fee_early != null || f.entry_fee_regular != null) && (
+                    <div style={{ fontSize: 12, color: '#718096' }}>
+                      {t.festivals.entryFee}:{' '}
+                      {f.entry_fee_early != null && f.entry_fee_regular != null
+                        ? `${formatFee(f.entry_fee_early)} / ${formatFee(f.entry_fee_regular)}`
+                        : formatFee(f.entry_fee_early ?? f.entry_fee_regular)}
                     </div>
                   )}
                 </div>

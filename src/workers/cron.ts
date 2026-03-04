@@ -3,6 +3,7 @@
 
 import { scrapeAsianFilmFestivals, scrapeCineuropaRss } from './scraper';
 import { scrapeFunds } from './fund-scraper';
+import { batchAnalyzeFestivals, batchAnalyzeFunds, batchAnalyzeEducation } from './ai-scraper';
 import { buildBundledAlertEmail, buildDigestEmail, buildErrorAlertEmail, type AlertItem, type DigestItem } from './email-templates';
 
 export interface Env {
@@ -10,6 +11,7 @@ export interface Env {
   RESEND_API_KEY: string;
   ALERT_EMAIL: string;
   APP_URL: string;
+  ANTHROPIC_API_KEY: string;
 }
 
 export async function handleCron(env: Env): Promise<void> {
@@ -19,6 +21,7 @@ export async function handleCron(env: Env): Promise<void> {
     ['AsianFilmFestivals scraper', runScraper(env)],
     ['Cineuropa scraper', runCineuropa(env)],
     ['Fund scraper', runFundScraper(env)],
+    ['AI credibility analysis', runAIAnalysis(env)],
     ['Monitor alerts', checkMonitorCommands(env)],
     ['Daily digest', sendDailyDigest(env)],
   ];
@@ -48,6 +51,20 @@ export async function handleCron(env: Env): Promise<void> {
   ).run();
 
   console.log('[IFT Cron] Done.');
+}
+
+async function runAIAnalysis(env: Env): Promise<void> {
+  if (!env.ANTHROPIC_API_KEY) {
+    console.warn('[Cron] No ANTHROPIC_API_KEY set, skipping AI analysis.');
+    return;
+  }
+  try {
+    await batchAnalyzeFestivals(env.DB, env);
+    await batchAnalyzeFunds(env.DB, env);
+    await batchAnalyzeEducation(env.DB, env);
+  } catch (err) {
+    console.error('[Cron] AI analysis failed:', err);
+  }
 }
 
 async function runFundScraper(env: Env): Promise<void> {

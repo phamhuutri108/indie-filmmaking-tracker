@@ -20,6 +20,9 @@ export interface Festival {
   description_vi?: string;
   status?: string;
   source?: string;
+  prestige_tier?: string;     // 'a-list' | 'recognized' | 'credible' | 'unverified' | 'not-recommended'
+  prestige_signals?: string;  // JSON string array
+  genres?: string;            // JSON string array
 }
 
 export interface Fund {
@@ -40,6 +43,8 @@ export interface Fund {
   description?: string;
   status?: string;
   last_checked?: string;
+  prestige_tier?: string;
+  genres?: string;
 }
 
 export interface Education {
@@ -60,6 +65,8 @@ export interface Education {
   eligibility?: string;
   description?: string;
   status?: string;
+  prestige_tier?: string;
+  genres?: string;
 }
 
 export interface Monitor {

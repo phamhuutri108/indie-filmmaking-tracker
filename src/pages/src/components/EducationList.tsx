@@ -9,6 +9,14 @@ const API_BASE = '/api';
 
 const EDU_TYPES = ['lab', 'residency', 'workshop', 'scholarship', 'masterclass'];
 
+const PRESTIGE_COLORS: Record<string, string> = {
+  'a-list': '#d69e2e',
+  recognized: '#38a169',
+  credible: '#004aad',
+  unverified: '#718096',
+  'not-recommended': '#e53e3e',
+};
+
 function formatDate(d?: string): string {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -53,6 +61,11 @@ function EducationDetail({
       )}
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
+        {item.prestige_tier && (
+          <span style={badgeStyle(PRESTIGE_COLORS[item.prestige_tier] ?? '#718096')}>
+            {(t as any).prestige?.[item.prestige_tier] ?? item.prestige_tier}
+          </span>
+        )}
         {item.type && <span style={badgeStyle('#805ad5')}>{item.type}</span>}
         {item.duration && <span style={badgeStyle('#d69e2e')}>{item.duration}</span>}
         {item.covers_travel ? <span style={badgeStyle('#38a169')}>✈ {te.coversTravel}</span> : null}
@@ -386,6 +399,11 @@ export function EducationList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof
                     <div style={{ fontSize: 13, color: '#718096', marginTop: 2 }}>{e.organization}</div>
                   )}
                   <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {e.prestige_tier && e.prestige_tier !== 'unverified' && (
+                      <span style={badgeStyle(PRESTIGE_COLORS[e.prestige_tier] ?? '#718096')}>
+                        {(t as any).prestige?.[e.prestige_tier] ?? e.prestige_tier}
+                      </span>
+                    )}
                     {e.type && <span style={badgeStyle('#805ad5')}>{e.type}</span>}
                     {e.duration && <span style={badgeStyle('#d69e2e')}>{e.duration}</span>}
                     {e.covers_travel && e.covers_accommodation

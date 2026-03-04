@@ -11,6 +11,14 @@ const FUND_TYPES = ['development', 'production', 'post-production', 'distributio
 const FOCUS_OPTIONS = ['documentary', 'narrative', 'animation', 'experimental'];
 const REGION_OPTIONS = ['global', 'asia', 'southeast-asia', 'europe', 'africa', 'latin-america'];
 
+const PRESTIGE_COLORS: Record<string, string> = {
+  'a-list': '#d69e2e',
+  recognized: '#38a169',
+  credible: '#004aad',
+  unverified: '#718096',
+  'not-recommended': '#e53e3e',
+};
+
 function formatAmount(usd?: number, currency?: string): string {
   if (!usd) return '—';
   return `$${usd.toLocaleString()} ${currency ?? 'USD'}`;
@@ -55,6 +63,11 @@ function FundDetail({
       )}
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
+        {fund.prestige_tier && (
+          <span style={badgeStyle(PRESTIGE_COLORS[fund.prestige_tier] ?? '#718096')}>
+            {(t as any).prestige?.[fund.prestige_tier] ?? fund.prestige_tier}
+          </span>
+        )}
         {fund.type && <span style={badgeStyle('#004aad')}>{fund.type}</span>}
         {fund.focus && <span style={badgeStyle('#805ad5')}>{fund.focus}</span>}
         {fund.region_focus && <span style={badgeStyle('#38a169')}>{fund.region_focus}</span>}
@@ -384,6 +397,11 @@ export function FundList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI
                     <div style={{ fontSize: 13, color: '#718096', marginTop: 2 }}>{f.organization}</div>
                   )}
                   <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {f.prestige_tier && f.prestige_tier !== 'unverified' && (
+                      <span style={badgeStyle(PRESTIGE_COLORS[f.prestige_tier] ?? '#718096')}>
+                        {(t as any).prestige?.[f.prestige_tier] ?? f.prestige_tier}
+                      </span>
+                    )}
                     {f.type && <span style={badgeStyle('#004aad')}>{f.type}</span>}
                     {f.focus && <span style={badgeStyle('#805ad5')}>{f.focus}</span>}
                     {f.region_focus && <span style={badgeStyle('#38a169')}>{f.region_focus}</span>}
