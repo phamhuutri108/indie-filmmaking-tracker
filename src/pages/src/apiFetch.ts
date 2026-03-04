@@ -56,13 +56,20 @@ export function readStoredAuth(): StoredAuth {
   return { role: 'guest', token: null };
 }
 
-/** Fetch wrapper that adds Authorization header when a token is present */
-export function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
+/** Fetch wrapper that adds Authorization header when a token is present.
+ *  Auto-clears auth and redirects to / if server returns 401 (token expired). */
+export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const token = getToken();
   const headers: Record<string, string> = { ...(options.headers as Record<string, string> ?? {}) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   if (options.body && typeof options.body === 'string' && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
   }
-  return fetch(url, { ...options, headers });
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401 && token) {
+    // Token expired or invalid — clear auth and redirect to login
+    clearAuth();
+    window.location.href = '/';
+  }
+  return res;
 }
