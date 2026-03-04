@@ -198,7 +198,7 @@ export function FestivalInformation({
     if (!isLoggedIn) { setLoading(false); return; }
     apiFetch('/api/festivals?limit=200')
       .then(r => r.json())
-      .then((data: any) => setFestivals(Array.isArray(data) ? data : (data.festivals ?? [])))
+      .then((data: any) => setFestivals(Array.isArray(data) ? data : (data.data ?? data.festivals ?? [])))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [isLoggedIn]);
