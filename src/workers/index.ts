@@ -9,7 +9,7 @@ import { scrapeAsianFilmFestivals } from './scraper';
 import { scrapeFunds } from './fund-scraper';
 import { generateICS, dbRowsToEvents } from './calendar';
 import { signJWT, verifyJWT, getUserFromRequest } from './auth';
-import { generateFestivalInsights } from './festival-insights';
+import { generateFestivalInsights, generateViTranslation } from './festival-insights';
 
 // Injected by wrangler at build time when [site] is configured
 // @ts-ignore
@@ -756,19 +756,13 @@ app.get('/api/festivals/:id/insights', async (c) => {
   const festivalId = Number(c.req.param('id'));
   if (isNaN(festivalId)) return c.json({ error: 'Invalid id' }, 400);
 
-  // Return cached insights if available (and bilingual if lang=vi)
+  // Return cached insights if available (always serve EN cache immediately)
   const cached = await c.env.DB.prepare(
     `SELECT * FROM festival_insights WHERE festival_id = ?`
   ).bind(festivalId).first<Record<string, unknown>>();
 
-  // Serve cache only when it already has _vi content (or lang is not vi)
-  const needVi = c.req.query('lang') === 'vi';
-  if (cached && (!needVi || cached.summary_vi)) {
-    return c.json({ data: cached, cached: true });
-  }
-  // If cached but missing _vi, delete it so we regenerate with bilingual prompt
   if (cached) {
-    await c.env.DB.prepare(`DELETE FROM festival_insights WHERE festival_id = ?`).bind(festivalId).run();
+    return c.json({ data: cached, cached: true });
   }
 
   // Load festival data
@@ -819,6 +813,41 @@ app.delete('/api/festivals/:id/insights', async (c) => {
   await c.env.DB.prepare(`DELETE FROM festival_insights WHERE festival_id = ?`)
     .bind(c.req.param('id')).run();
   return c.json({ ok: true });
+});
+
+// Translate cached EN insights to Vietnamese (called in background from frontend)
+app.post('/api/festivals/:id/insights/translate-vi', async (c) => {
+  const festivalId = Number(c.req.param('id'));
+  if (isNaN(festivalId)) return c.json({ error: 'Invalid id' }, 400);
+
+  const cached = await c.env.DB.prepare(
+    `SELECT summary, what_they_look_for, eligibility, industry_presence, tips, summary_vi
+     FROM festival_insights WHERE festival_id = ?`
+  ).bind(festivalId).first<{
+    summary: string; what_they_look_for: string; eligibility: string;
+    industry_presence: string; tips: string; summary_vi: string | null;
+  }>();
+
+  if (!cached) return c.json({ error: 'No cached insights' }, 404);
+  // Already has VI — nothing to do
+  if (cached.summary_vi) return c.json({ ok: true, skipped: true });
+
+  const vi = await generateViTranslation({
+    summary: cached.summary,
+    what_they_look_for: cached.what_they_look_for,
+    eligibility: cached.eligibility,
+    industry_presence: cached.industry_presence,
+    tips: cached.tips,
+  }, c.env.ANTHROPIC_API_KEY);
+
+  await c.env.DB.prepare(`
+    UPDATE festival_insights
+    SET summary_vi = ?, what_they_look_for_vi = ?, eligibility_vi = ?,
+        industry_presence_vi = ?, tips_vi = ?
+    WHERE festival_id = ?
+  `).bind(vi.summary_vi, vi.what_they_look_for_vi, vi.eligibility_vi, vi.industry_presence_vi, vi.tips_vi, festivalId).run();
+
+  return c.json({ ok: true, data: vi });
 });
 
 app.post('/api/festivals', async (c) => {

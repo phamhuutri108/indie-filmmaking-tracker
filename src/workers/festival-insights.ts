@@ -63,6 +63,72 @@ interface FestivalData {
   tier?: string | null;
 }
 
+// ─── VI-only translation (fast, called in background) ────────────────────────
+export interface ViFields {
+  summary_vi: string;
+  what_they_look_for_vi: string;
+  eligibility_vi: string;
+  industry_presence_vi: string;
+  tips_vi: string;
+}
+
+export async function generateViTranslation(
+  en: { summary: string; what_they_look_for: string; eligibility: string; industry_presence: string; tips: string },
+  apiKey: string
+): Promise<ViFields> {
+  const prompt = `Dịch các đoạn văn tiếng Anh sau sang tiếng Việt tự nhiên, chuyên nghiệp (không dịch máy từng từ). Trả lời CHỈ bằng JSON hợp lệ, không có markdown hay giải thích.
+
+{
+  "summary": ${JSON.stringify(en.summary)},
+  "what_they_look_for": ${JSON.stringify(en.what_they_look_for)},
+  "eligibility": ${JSON.stringify(en.eligibility)},
+  "industry_presence": ${JSON.stringify(en.industry_presence)},
+  "tips": ${JSON.stringify(en.tips)}
+}
+
+Cấu trúc JSON trả về:
+{
+  "summary_vi": "...",
+  "what_they_look_for_vi": "...",
+  "eligibility_vi": "...",
+  "industry_presence_vi": "...",
+  "tips_vi": "..."
+}`;
+
+  const res = await fetch(ANTHROPIC_API_URL, {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: SONNET_MODEL,
+      max_tokens: 4000,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+
+  if (!res.ok) throw new Error(`Anthropic API error: ${res.status}`);
+
+  const data = await res.json() as { content: Array<{ text: string }> };
+  const text = (data.content?.[0]?.text ?? '').trim();
+  const jsonText = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+
+  try {
+    const parsed = JSON.parse(jsonText) as ViFields;
+    return {
+      summary_vi: parsed.summary_vi ?? '',
+      what_they_look_for_vi: parsed.what_they_look_for_vi ?? '',
+      eligibility_vi: parsed.eligibility_vi ?? '',
+      industry_presence_vi: parsed.industry_presence_vi ?? '',
+      tips_vi: parsed.tips_vi ?? '',
+    };
+  } catch {
+    return { summary_vi: '', what_they_look_for_vi: '', eligibility_vi: '', industry_presence_vi: '', tips_vi: '' };
+  }
+}
+
 export async function generateFestivalInsights(
   festival: FestivalData,
   apiKey: string

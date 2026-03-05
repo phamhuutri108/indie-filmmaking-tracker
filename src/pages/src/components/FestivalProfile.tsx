@@ -201,22 +201,40 @@ function ConfidenceBanner({ confidence, tp }: { confidence: 'high' | 'medium' | 
   );
 }
 
+// ─── Animated spinner (CSS keyframes injected inline) ────────────────────────
+const SPIN_CSS = `@keyframes ift-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`;
+function Spinner({ size = 24 }: { size?: number }) {
+  return (
+    <>
+      <style>{SPIN_CSS}</style>
+      <div style={{
+        width: size, height: size, borderRadius: '50%',
+        border: `${Math.max(2, Math.round(size / 8))}px solid #e2e8f0`,
+        borderTopColor: '#004aad',
+        animation: 'ift-spin 0.8s linear infinite',
+        display: 'inline-block', flexShrink: 0,
+      }} />
+    </>
+  );
+}
+
 // ─── Narrative block ──────────────────────────────────────────────────────────
 function NarrativeBlock({ label, text }: { label: string; text?: string }) {
   if (!text) return null;
   return (
     <div style={{ marginBottom: 20 }}>
       <h3 style={{ fontSize: 14, fontWeight: 700, color: '#2d3748', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</h3>
-      <p style={{ fontSize: 14, lineHeight: 1.7, color: '#4a5568', margin: 0 }}>{text}</p>
+      <p style={{ fontSize: 14, lineHeight: 1.7, color: '#4a5568', margin: 0, textAlign: 'justify' }}>{text}</p>
     </div>
   );
 }
 
 // ─── Overview Tab ─────────────────────────────────────────────────────────────
-function OverviewTab({ festival, insights, insightsLoading, tp, t, lang }: {
+function OverviewTab({ festival, insights, insightsLoading, viTranslating, tp, t, lang }: {
   festival: Festival;
   insights: FestivalInsights | null;
   insightsLoading: boolean;
+  viTranslating: boolean;
   tp: Record<string, string>;
   t: ReturnType<typeof useI18n>;
   lang: Lang;
@@ -225,8 +243,9 @@ function OverviewTab({ festival, insights, insightsLoading, tp, t, lang }: {
   if (insightsLoading) {
     return (
       <div style={{ textAlign: 'center', padding: '40px 0', color: '#718096' }}>
-        <div style={{ fontSize: 24, marginBottom: 8 }}>⏳</div>
-        <p>{tp.loadingInsights ?? 'Generating profile... (about 15–30 seconds)'}</p>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><Spinner size={28} /></div>
+        <p style={{ margin: '0 0 4px' }}>{vi ? 'Đang tạo hồ sơ...' : 'Generating profile...'}</p>
+        <p style={{ margin: 0, fontSize: 12, color: '#a0aec0' }}>{vi ? '(khoảng 15–30 giây)' : '(about 15–30 seconds)'}</p>
       </div>
     );
   }
@@ -237,6 +256,11 @@ function OverviewTab({ festival, insights, insightsLoading, tp, t, lang }: {
 
   return (
     <div>
+      {viTranslating && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: '#ebf8ff', borderRadius: 6, border: '1px solid #bee3f8', fontSize: 12, color: '#2b6cb0', marginBottom: 14 }}>
+          <Spinner size={14} /> Đang dịch sang tiếng Việt...
+        </div>
+      )}
       <ConfidenceBanner confidence={insights.confidence} tp={tp} />
 
       <NarrativeBlock label={tp.about ?? 'About'} text={vi && insights.summary_vi ? insights.summary_vi : insights.summary} />
@@ -445,8 +469,9 @@ function HistoryTab({ festival, insights, insightsLoading, tp, isOwner, onRegene
   if (insightsLoading) {
     return (
       <div style={{ textAlign: 'center', padding: '40px 0', color: '#718096' }}>
-        <div style={{ fontSize: 24, marginBottom: 8 }}>⏳</div>
-        <p>{tp.loadingInsights ?? 'Generating profile... (about 15–30 seconds)'}</p>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><Spinner size={28} /></div>
+        <p style={{ margin: '0 0 4px' }}>Generating profile...</p>
+        <p style={{ margin: 0, fontSize: 12, color: '#a0aec0' }}>(about 15–30 seconds)</p>
       </div>
     );
   }
@@ -575,6 +600,7 @@ export function FestivalProfile({
   const [festivalLoading, setFestivalLoading] = useState(true);
   const [insights, setInsights] = useState<FestivalInsights | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(true);
+  const [viTranslating, setViTranslating] = useState(false);
   const [subTab, setSubTab] = useState<ProfileSubTab>('overview');
 
   // My status
@@ -593,12 +619,29 @@ export function FestivalProfile({
       .finally(() => setFestivalLoading(false));
   }, [festivalId]);
 
-  // Load AI insights
+  // Load AI insights; if VI mode and no summary_vi yet, translate in background
   const loadInsights = () => {
     setInsightsLoading(true);
-    fetch(`${API_BASE}/festivals/${festivalId}/insights${lang === 'vi' ? '?lang=vi' : ''}`)
+    setViTranslating(false);
+    fetch(`${API_BASE}/festivals/${festivalId}/insights`)
       .then((r) => r.json() as Promise<{ data: Record<string, unknown>; cached: boolean }>)
-      .then((d) => setInsights(parseInsights(d.data)))
+      .then((d) => {
+        const parsed = parseInsights(d.data);
+        setInsights(parsed);
+        // If viewing in VI and translation not yet cached, generate in background
+        if (lang === 'vi' && !parsed.summary_vi) {
+          setViTranslating(true);
+          fetch(`${API_BASE}/festivals/${festivalId}/insights/translate-vi`, { method: 'POST' })
+            .then((r) => r.json() as Promise<{ ok: boolean; data?: Record<string, unknown> }>)
+            .then((res) => {
+              if (res.ok && res.data) {
+                setInsights((prev) => prev ? { ...prev, ...(res.data as Partial<FestivalInsights>) } : prev);
+              }
+            })
+            .catch(() => {})
+            .finally(() => setViTranslating(false));
+        }
+      })
       .catch(() => {})
       .finally(() => setInsightsLoading(false));
   };
@@ -745,7 +788,7 @@ export function FestivalProfile({
       {/* ── Tab content ── */}
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '28px 24px' }}>
         {subTab === 'overview' && (
-          <OverviewTab festival={festival} insights={insights} insightsLoading={insightsLoading} tp={tp} t={t} lang={lang} />
+          <OverviewTab festival={festival} insights={insights} insightsLoading={insightsLoading} viTranslating={viTranslating} tp={tp} t={t} lang={lang} />
         )}
         {subTab === 'sections' && (
           <SectionsTab
