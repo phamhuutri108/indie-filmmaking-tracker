@@ -45,7 +45,7 @@ function daysUntil(dateStr: string): number {
   return Math.ceil((target.getTime() - today.getTime()) / 86400000);
 }
 
-// ─── Full-height Card with overlay ───────────────────────────────────────────
+// ─── Card: 16/9 thumbnail + text below ───────────────────────────────────────
 function FestivalCard({
   festival, lang, onOpen,
 }: {
@@ -62,118 +62,108 @@ function FestivalCard({
   const deadline = formatDeadline(festival);
   const prestige = festival.prestige_tier ? PRESTIGE_COLORS[festival.prestige_tier] : null;
 
-  let deadlineColor = '#86efac';
+  let deadlineBg = '#e2e8f0'; let deadlineColor = '#4a5568';
   if (deadline) {
     const d = daysUntil(deadline.date);
-    if (d <= 7) deadlineColor = '#fca5a5';
-    else if (d <= 30) deadlineColor = '#fdba74';
+    if (d <= 7)  { deadlineBg = '#fed7d7'; deadlineColor = '#c53030'; }
+    else if (d <= 30) { deadlineBg = '#feebc8'; deadlineColor = '#c05621'; }
+    else { deadlineBg = '#c6f6d5'; deadlineColor = '#276749'; }
   }
 
   return (
     <div
       onClick={() => onOpen(festival.id, festival.name)}
       style={{
-        position: 'relative',
-        borderRadius: 10,
-        overflow: 'hidden',
+        background: '#fff',
+        borderRadius: 8,
+        boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
         cursor: 'pointer',
-        background: `linear-gradient(145deg, hsl(${hue},55%,72%) 0%, hsl(${hue + 30},50%,55%) 100%)`,
-        aspectRatio: '3 / 4',
-        display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-        transition: 'transform 0.15s, box-shadow 0.15s',
+        overflow: 'hidden',
+        display: 'flex', flexDirection: 'column',
+        transition: 'box-shadow 0.15s, transform 0.15s',
       }}
       onMouseEnter={e => {
-        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-3px) scale(1.02)';
-        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 8px 24px rgba(0,0,0,0.22)';
+        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 6px 20px rgba(0,74,173,0.18)';
+        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
       }}
       onMouseLeave={e => {
-        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0) scale(1)';
-        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)';
+        (e.currentTarget as HTMLDivElement).style.boxShadow = '0 1px 4px rgba(0,0,0,0.08)';
+        (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
       }}
     >
-      {/* Letter avatar — always in center */}
+      {/* Thumbnail — 16:9, logo fills ~85% of height */}
       <div style={{
-        position: 'absolute', inset: 0,
+        width: '100%', aspectRatio: '16/9',
+        background: `linear-gradient(135deg, hsl(${hue},55%,88%) 0%, hsl(${hue},45%,78%) 100%)`,
+        position: 'relative',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
+        overflow: 'hidden', flexShrink: 0,
+        borderRadius: '8px 8px 0 0',
       }}>
+        {/* Letter avatar — fallback */}
         <span style={{
-          fontSize: 52, fontWeight: 900,
-          color: `rgba(255,255,255,0.35)`,
-          letterSpacing: 3, userSelect: 'none',
-          opacity: faviconOk ? 0 : 1, transition: 'opacity 0.2s',
+          fontSize: 36, fontWeight: 900,
+          color: `hsl(${hue},40%,38%)`,
+          letterSpacing: 2, userSelect: 'none',
+          opacity: faviconOk ? 0 : 1,
+          transition: 'opacity 0.2s',
+          position: 'absolute',
         }}>
           {initials}
         </span>
+
+        {/* Favicon — sized to fill ~85% of container height */}
+        {faviconUrl && (
+          <img
+            src={faviconUrl}
+            alt=""
+            onLoad={() => setFaviconOk(true)}
+            onError={() => setFaviconOk(false)}
+            style={{
+              position: 'absolute',
+              height: '85%', width: '85%',
+              objectFit: 'contain',
+              opacity: faviconOk ? 1 : 0,
+              transition: 'opacity 0.2s',
+            }}
+          />
+        )}
       </div>
 
-      {/* Favicon — centered, fades in */}
-      {faviconUrl && (
-        <img
-          src={faviconUrl}
-          alt=""
-          onLoad={() => setFaviconOk(true)}
-          onError={() => setFaviconOk(false)}
-          style={{
-            position: 'absolute',
-            top: '50%', left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: 72, height: 72,
-            objectFit: 'contain',
-            opacity: faviconOk ? 1 : 0,
-            transition: 'opacity 0.2s',
-            borderRadius: 12,
-            background: 'rgba(255,255,255,0.15)',
-            padding: 8,
-            backdropFilter: 'blur(4px)',
-          }}
-        />
-      )}
+      {/* Text section */}
+      <div style={{ padding: '10px 12px', flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
+        <div style={{ fontWeight: 700, fontSize: 13, color: '#1a202c', lineHeight: 1.35 }}>
+          {lang === 'vi' && festival.name_vi ? festival.name_vi : festival.name}
+        </div>
 
-      {/* Bottom overlay with text */}
-      <div style={{
-        position: 'relative',
-        background: 'linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.4) 70%, transparent 100%)',
-        padding: '32px 12px 12px',
-      }}>
-        {/* Prestige badge */}
+        {(festival.country || festival.city) && (
+          <div style={{ fontSize: 11, color: '#718096' }}>
+            {[festival.city, festival.country].filter(Boolean).join(', ')}
+          </div>
+        )}
+
         {prestige && (
           <span style={{
-            display: 'inline-block', fontSize: 9, fontWeight: 700,
-            padding: '2px 6px', borderRadius: 8, marginBottom: 5,
+            alignSelf: 'flex-start', fontSize: 10, fontWeight: 700,
+            padding: '2px 7px', borderRadius: 10,
             background: prestige.bg, color: prestige.color,
           }}>
             {prestige.label}
           </span>
         )}
 
-        {/* Name */}
-        <div style={{
-          fontWeight: 700, fontSize: 13, color: '#fff',
-          lineHeight: 1.3, marginBottom: 4,
-          textShadow: '0 1px 3px rgba(0,0,0,0.5)',
-        }}>
-          {lang === 'vi' && festival.name_vi ? festival.name_vi : festival.name}
+        <div style={{ marginTop: 'auto', paddingTop: 4 }}>
+          {deadline ? (
+            <span style={{ fontSize: 11, fontWeight: 600, background: deadlineBg, color: deadlineColor, padding: '3px 8px', borderRadius: 6 }}>
+              {deadline.label}: {new Date(deadline.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              {' '}({daysUntil(deadline.date)}d)
+            </span>
+          ) : (
+            <span style={{ fontSize: 11, color: '#a0aec0' }}>
+              {lang === 'vi' ? 'Đã đóng' : 'Closed'}
+            </span>
+          )}
         </div>
-
-        {/* Country */}
-        {(festival.country || festival.city) && (
-          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', marginBottom: 5 }}>
-            {[festival.city, festival.country].filter(Boolean).join(', ')}
-          </div>
-        )}
-
-        {/* Deadline */}
-        {deadline ? (
-          <div style={{ fontSize: 10, fontWeight: 600, color: deadlineColor }}>
-            {deadline.label}: {new Date(deadline.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            {' '}({daysUntil(deadline.date)}d)
-          </div>
-        ) : (
-          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)' }}>
-            {lang === 'vi' ? 'Đã đóng' : 'Closed'}
-          </div>
-        )}
       </div>
     </div>
   );
