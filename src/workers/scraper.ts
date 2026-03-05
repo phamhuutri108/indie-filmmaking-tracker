@@ -449,6 +449,75 @@ Text: ${snippet}`,
 }
 
 /**
+ * Use Claude + web_search to find entry fees for a festival.
+ * Handles pause_turn continuation loop (max 3 iterations).
+ * Returns amounts in cents; all null if not found.
+ */
+async function searchFestivalFeeWithAI(
+  festivalName: string,
+  country: string | null,
+  apiKey: string
+): Promise<{ fee_early: number | null; fee_regular: number | null; fee_late: number | null; currency: string }> {
+  const none = { fee_early: null, fee_regular: null, fee_late: null, currency: 'USD' };
+  type Msg = { role: 'user' | 'assistant'; content: unknown };
+
+  const messages: Msg[] = [{
+    role: 'user',
+    content: `Search for the current entry/submission fee for "${festivalName}" film festival${country ? ` (${country})` : ''}. Return ONLY this JSON, no explanation:
+{"fee_early":null,"fee_regular":null,"fee_late":null,"currency":"USD"}
+Rules: amounts in cents (integer, e.g. $25→2500), ISO 4217 currency, null if not found.`,
+  }];
+
+  for (let i = 0; i < 3; i++) {
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 300,
+          tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+          messages,
+        }),
+      });
+      if (!res.ok) return none;
+
+      const data = await res.json() as {
+        stop_reason: string;
+        content: Array<{ type: string; text?: string }>;
+      };
+
+      if (data.stop_reason === 'end_turn') {
+        const text = data.content?.find((b) => b.type === 'text')?.text ?? '';
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) return none;
+        const p = JSON.parse(jsonMatch[0]);
+        return {
+          fee_early:   typeof p.fee_early   === 'number' ? Math.round(p.fee_early)   : null,
+          fee_regular: typeof p.fee_regular === 'number' ? Math.round(p.fee_regular) : null,
+          fee_late:    typeof p.fee_late    === 'number' ? Math.round(p.fee_late)    : null,
+          currency:    typeof p.currency    === 'string' && p.currency.length >= 3 ? p.currency.toUpperCase() : 'USD',
+        };
+      }
+
+      if (data.stop_reason === 'pause_turn') {
+        messages.push({ role: 'assistant', content: data.content });
+        continue;
+      }
+
+      break;
+    } catch {
+      return none;
+    }
+  }
+  return none;
+}
+
+/**
  * Post-process parsed festivals: for entries whose regex found no fees,
  * call Claude AI on the original RSS content to attempt extraction.
  * Runs up to 5 requests concurrently; failures are silently skipped.
@@ -491,17 +560,33 @@ async function enrichFeesWithAI(
 
   // Pass 2: fetch official website for festivals still missing fees
   const stillMissing = missing.filter((e) => noFees(e.festival) && e.festival.website);
-  if (stillMissing.length === 0) return;
-  console.log(`[Scraper] Fetching ${stillMissing.length} festival websites for fee data…`);
+  if (stillMissing.length > 0) {
+    console.log(`[Scraper] Fetching ${stillMissing.length} festival websites for fee data…`);
+    for (let i = 0; i < stillMissing.length; i += CONCURRENCY) {
+      await Promise.allSettled(
+        stillMissing.slice(i, i + CONCURRENCY).map(async ({ festival }) => {
+          const text = await fetchWebsiteText(festival.website!);
+          if (!text) return;
+          const fees = await extractFeesWithAI(text, festival.name, apiKey);
+          if (applyFees(festival, fees)) {
+            console.log(`[Scraper] AI(web) fees for "${festival.name}": ${JSON.stringify(fees)}`);
+          }
+        })
+      );
+    }
+  }
 
-  for (let i = 0; i < stillMissing.length; i += CONCURRENCY) {
+  // Pass 3: web search for festivals still missing fees (limit 5 per run to avoid cost)
+  const searchNeeded = missing.filter((e) => noFees(e.festival)).slice(0, 5);
+  if (searchNeeded.length === 0) return;
+  console.log(`[Scraper] Web search for fees: ${searchNeeded.length} festivals…`);
+
+  for (let i = 0; i < searchNeeded.length; i += CONCURRENCY) {
     await Promise.allSettled(
-      stillMissing.slice(i, i + CONCURRENCY).map(async ({ festival }) => {
-        const text = await fetchWebsiteText(festival.website!);
-        if (!text) return;
-        const fees = await extractFeesWithAI(text, festival.name, apiKey);
+      searchNeeded.slice(i, i + CONCURRENCY).map(async ({ festival }) => {
+        const fees = await searchFestivalFeeWithAI(festival.name, festival.country, apiKey);
         if (applyFees(festival, fees)) {
-          console.log(`[Scraper] AI(web) fees for "${festival.name}": ${JSON.stringify(fees)}`);
+          console.log(`[Scraper] AI(search) fees for "${festival.name}": ${JSON.stringify(fees)}`);
         }
       })
     );
