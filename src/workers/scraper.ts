@@ -453,7 +453,7 @@ Text: ${snippet}`,
  * Handles pause_turn continuation loop (max 3 iterations).
  * Returns amounts in cents; all null if not found.
  */
-async function searchFestivalFeeWithAI(
+export async function searchFestivalFeeWithAI(
   festivalName: string,
   country: string | null,
   apiKey: string

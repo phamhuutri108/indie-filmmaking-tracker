@@ -5,7 +5,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { getAssetFromKV, NotFoundError } from '@cloudflare/kv-asset-handler';
 import { handleCron } from './cron';
-import { scrapeAsianFilmFestivals } from './scraper';
+import { scrapeAsianFilmFestivals, searchFestivalFeeWithAI } from './scraper';
 import { scrapeFunds } from './fund-scraper';
 import { generateICS, dbRowsToEvents } from './calendar';
 import { signJWT, verifyJWT, getUserFromRequest } from './auth';
@@ -695,6 +695,43 @@ function buildAnnouncementEmail(content: string, recipientName: string, appUrl: 
 app.get('/api/scrape', async (c) => {
   const result = await scrapeAsianFilmFestivals(c.env.DB, c.env.ANTHROPIC_API_KEY);
   return c.json({ saved: result.saved, skipped: result.skipped, errors: result.errors, ts: new Date().toISOString() });
+});
+
+// Background fee enrichment for existing festivals with no fees
+app.get('/api/festivals/enrich-fees', async (c) => {
+  const db = c.env.DB;
+  const apiKey = c.env.ANTHROPIC_API_KEY;
+
+  const rows = await db.prepare(`
+    SELECT f.id, f.name, f.country, s.id as section_id
+    FROM festivals f
+    JOIN festival_sections s ON s.festival_id = f.id
+    WHERE s.entry_fee_regular IS NULL AND s.entry_fee_early IS NULL
+    LIMIT 30
+  `).all<{ id: number; name: string; country: string | null; section_id: number }>();
+
+  const festivals = rows.results;
+
+  c.executionCtx.waitUntil((async () => {
+    for (const fest of festivals) {
+      try {
+        const fees = await searchFestivalFeeWithAI(fest.name, fest.country, apiKey);
+        if (fees.fee_early !== null || fees.fee_regular !== null || fees.fee_late !== null) {
+          await db.prepare(`
+            UPDATE festival_sections
+            SET entry_fee_early = ?, entry_fee_regular = ?, entry_fee_late = ?, entry_currency = ?
+            WHERE id = ?
+          `).bind(fees.fee_early, fees.fee_regular, fees.fee_late, fees.currency, fest.section_id).run();
+          console.log(`[EnrichFees] "${fest.name}": ${JSON.stringify(fees)}`);
+        }
+      } catch (e) {
+        console.error(`[EnrichFees] Failed for "${fest.name}":`, e);
+      }
+    }
+    console.log('[EnrichFees] Done');
+  })());
+
+  return c.json({ started: true, count: festivals.length, ts: new Date().toISOString() });
 });
 
 app.get('/api/funds/scrape', async (c) => {
