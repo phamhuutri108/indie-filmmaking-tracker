@@ -390,6 +390,50 @@ app.delete('/api/auth/users/:id', async (c) => {
   return c.json({ ok: true });
 });
 
+// Admin: view user's films (owner only)
+app.get('/api/admin/users/:id/films', async (c) => {
+  const payload = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!payload || payload.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
+  const userId = Number(c.req.param('id'));
+  const result = await c.env.DB.prepare(
+    `SELECT id, title, year, genre, status, duration_min, director, created_at FROM films WHERE user_id = ? ORDER BY created_at DESC`
+  ).bind(userId).all();
+  return c.json({ data: result.results });
+});
+
+// Admin: view user's submissions (owner only)
+app.get('/api/admin/users/:id/submissions', async (c) => {
+  const payload = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!payload || payload.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
+  const userId = Number(c.req.param('id'));
+  const result = await c.env.DB.prepare(
+    `SELECT id, film_title, ref_name, ref_table, deadline, submitted_at, status, submission_platform, created_at FROM submissions WHERE user_id = ? ORDER BY created_at DESC`
+  ).bind(userId).all();
+  return c.json({ data: result.results });
+});
+
+// Admin: view user's watchlist (owner only)
+app.get('/api/admin/users/:id/watchlist', async (c) => {
+  const payload = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!payload || payload.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
+  const userId = Number(c.req.param('id'));
+  const result = await c.env.DB.prepare(`
+    SELECT w.id, w.ref_table, w.ref_id, w.starred_at,
+      CASE w.ref_table
+        WHEN 'festivals'          THEN (SELECT name FROM festivals WHERE id = w.ref_id)
+        WHEN 'funds_grants'       THEN (SELECT name FROM funds_grants WHERE id = w.ref_id)
+        WHEN 'education_residency' THEN (SELECT name FROM education_residency WHERE id = w.ref_id)
+      END AS ref_name,
+      CASE w.ref_table
+        WHEN 'festivals'          THEN (SELECT regular_deadline FROM festivals WHERE id = w.ref_id)
+        WHEN 'funds_grants'       THEN (SELECT deadline FROM funds_grants WHERE id = w.ref_id)
+        WHEN 'education_residency' THEN (SELECT deadline FROM education_residency WHERE id = w.ref_id)
+      END AS deadline
+    FROM watchlist w WHERE w.user_id = ? ORDER BY w.starred_at DESC
+  `).bind(userId).all();
+  return c.json({ data: result.results });
+});
+
 // ============================================================
 // Feedback
 // ============================================================
