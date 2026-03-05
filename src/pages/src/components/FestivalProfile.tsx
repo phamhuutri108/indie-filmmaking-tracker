@@ -20,9 +20,19 @@ const PRESTIGE_COLORS: Record<string, string> = {
   'not-recommended': '#e53e3e',
 };
 
-function formatFee(cents?: number): string {
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: '$', EUR: '€', CHF: 'Fr', GBP: '£', AUD: 'A$', CAD: 'C$',
+  JPY: '¥', KRW: '₩', SEK: 'kr', NOK: 'kr', DKK: 'kr', HUF: 'Ft',
+  CZK: 'Kč', PLN: 'zł', HKD: 'HK$', SGD: 'S$', INR: '₹',
+  BRL: 'R$', TRY: '₺', ILS: '₪', ZAR: 'R',
+};
+
+function formatFee(cents?: number, currency = 'USD'): string {
   if (!cents) return '—';
-  return `$${(cents / 100).toFixed(0)}`;
+  const symbol = CURRENCY_SYMBOLS[currency] ?? currency;
+  const amount = (cents / 100).toFixed(0);
+  const prefixed = new Set(['$', '€', '£', '¥', '₩', '₹', '₺', '₪', 'A$', 'C$', 'HK$', 'S$', 'R$']);
+  return prefixed.has(symbol) ? `${symbol}${amount}` : `${amount} ${symbol}`;
 }
 
 function formatDate(d?: string): string {
@@ -169,13 +179,23 @@ function SectionRow({ section, t, isOwner, onDeleted }: {
       </div>
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 13, color: '#4a5568' }}>
         {section.early_deadline && (
-          <span>Early: <strong>{formatDate(section.early_deadline)}</strong> {section.entry_fee_early != null && formatFee(section.entry_fee_early)}</span>
+          <span>Early: <strong>{formatDate(section.early_deadline)}</strong>{section.entry_fee_early != null && <> <span style={{ color: '#2d3748', fontWeight: 700 }}>{formatFee(section.entry_fee_early, section.entry_currency)}</span></>}</span>
         )}
         {section.regular_deadline && (
-          <span>Regular: <DeadlineBadge deadline={section.regular_deadline} t={t} /> <strong>{formatDate(section.regular_deadline)}</strong> {section.entry_fee_regular != null && formatFee(section.entry_fee_regular)}</span>
+          <span>Regular: <DeadlineBadge deadline={section.regular_deadline} t={t} /> <strong>{formatDate(section.regular_deadline)}</strong>{section.entry_fee_regular != null && <> <span style={{ color: '#2d3748', fontWeight: 700 }}>{formatFee(section.entry_fee_regular, section.entry_currency)}</span></>}</span>
         )}
         {section.late_deadline && (
-          <span>Late: <strong>{formatDate(section.late_deadline)}</strong></span>
+          <span>Late: <DeadlineBadge deadline={section.late_deadline} t={t} /> <strong>{formatDate(section.late_deadline)}</strong>{section.entry_fee_late != null && <> <span style={{ color: '#2d3748', fontWeight: 700 }}>{formatFee(section.entry_fee_late, section.entry_currency)}</span></>}</span>
+        )}
+        {(section.short_film_min_min != null || section.short_film_max_min != null) && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', background: '#ebf8ff', borderRadius: 10, fontSize: 12, color: '#2b6cb0', fontWeight: 600 }}>
+            🎞{' '}
+            {section.short_film_min_min != null && section.short_film_max_min != null
+              ? `${section.short_film_min_min}–${section.short_film_max_min} min`
+              : section.short_film_min_min != null
+              ? `≥${section.short_film_min_min} min`
+              : `≤${section.short_film_max_min} min`}
+          </span>
         )}
         {section.filmfreeway_url && (
           <a href={section.filmfreeway_url} target="_blank" rel="noreferrer"

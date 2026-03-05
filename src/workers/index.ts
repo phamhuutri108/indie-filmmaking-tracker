@@ -753,7 +753,9 @@ app.post('/api/festival-sections', async (c) => {
   const {
     festival_id, section_name, section_name_vi, category,
     early_deadline, regular_deadline, late_deadline,
-    entry_fee_early, entry_fee_regular, filmfreeway_url, notification_date,
+    entry_fee_early, entry_fee_regular, entry_fee_late, entry_currency,
+    filmfreeway_url, notification_date,
+    short_film_min_min, short_film_max_min,
   } = body as any;
 
   if (!festival_id || !section_name) return c.json({ error: 'festival_id and section_name required' }, 400);
@@ -762,9 +764,10 @@ app.post('/api/festival-sections', async (c) => {
     `INSERT INTO festival_sections
        (festival_id, section_name, section_name_vi, category,
         early_deadline, regular_deadline, late_deadline,
-        entry_fee_early, entry_fee_regular, filmfreeway_url,
-        notification_date, source)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual')
+        entry_fee_early, entry_fee_regular, entry_fee_late, entry_currency,
+        filmfreeway_url, notification_date,
+        short_film_min_min, short_film_max_min, source)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual')
      ON CONFLICT(festival_id, section_name) DO UPDATE SET
        section_name_vi = excluded.section_name_vi,
        category = excluded.category,
@@ -773,14 +776,22 @@ app.post('/api/festival-sections', async (c) => {
        late_deadline = excluded.late_deadline,
        entry_fee_early = excluded.entry_fee_early,
        entry_fee_regular = excluded.entry_fee_regular,
+       entry_fee_late = excluded.entry_fee_late,
+       entry_currency = excluded.entry_currency,
        filmfreeway_url = excluded.filmfreeway_url,
-       notification_date = excluded.notification_date`
+       notification_date = excluded.notification_date,
+       short_film_min_min = excluded.short_film_min_min,
+       short_film_max_min = excluded.short_film_max_min`
   ).bind(
     festival_id, section_name, section_name_vi ?? null, category ?? null,
     early_deadline ?? null, regular_deadline ?? null, late_deadline ?? null,
     entry_fee_early ? Math.round(Number(entry_fee_early) * 100) : null,
     entry_fee_regular ? Math.round(Number(entry_fee_regular) * 100) : null,
+    entry_fee_late ? Math.round(Number(entry_fee_late) * 100) : null,
+    entry_currency ?? 'USD',
     filmfreeway_url ?? null, notification_date ?? null,
+    short_film_min_min ? Number(short_film_min_min) : null,
+    short_film_max_min ? Number(short_film_max_min) : null,
   ).run();
 
   return c.json({ id: result.meta.last_row_id }, 201);

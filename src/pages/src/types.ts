@@ -69,6 +69,9 @@ export interface FestivalSection {
   notification_date?: string;
   status?: string;
   source?: string;
+  short_film_min_min?: number; // minimum short film duration (minutes)
+  short_film_max_min?: number; // maximum short film duration (minutes)
+  entry_currency?: string;    // e.g. 'USD', 'EUR', 'CHF'
 }
 
 export interface Festival {

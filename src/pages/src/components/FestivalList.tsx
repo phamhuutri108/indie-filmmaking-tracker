@@ -19,9 +19,45 @@ const PRESTIGE_COLORS: Record<string, string> = {
   'not-recommended': '#e53e3e',
 };
 
-function formatFee(cents?: number): string {
+// Common film festival currencies with their symbols
+const CURRENCIES: { code: string; label: string }[] = [
+  { code: 'USD', label: 'USD ($)' },
+  { code: 'EUR', label: 'EUR (€)' },
+  { code: 'CHF', label: 'CHF (Fr)' },
+  { code: 'GBP', label: 'GBP (£)' },
+  { code: 'AUD', label: 'AUD (A$)' },
+  { code: 'CAD', label: 'CAD (C$)' },
+  { code: 'JPY', label: 'JPY (¥)' },
+  { code: 'KRW', label: 'KRW (₩)' },
+  { code: 'SEK', label: 'SEK (kr)' },
+  { code: 'NOK', label: 'NOK (kr)' },
+  { code: 'DKK', label: 'DKK (kr)' },
+  { code: 'HUF', label: 'HUF (Ft)' },
+  { code: 'CZK', label: 'CZK (Kč)' },
+  { code: 'PLN', label: 'PLN (zł)' },
+  { code: 'HKD', label: 'HKD (HK$)' },
+  { code: 'SGD', label: 'SGD (S$)' },
+  { code: 'INR', label: 'INR (₹)' },
+  { code: 'BRL', label: 'BRL (R$)' },
+  { code: 'TRY', label: 'TRY (₺)' },
+  { code: 'ILS', label: 'ILS (₪)' },
+  { code: 'ZAR', label: 'ZAR (R)' },
+];
+
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: '$', EUR: '€', CHF: 'Fr', GBP: '£', AUD: 'A$', CAD: 'C$',
+  JPY: '¥', KRW: '₩', SEK: 'kr', NOK: 'kr', DKK: 'kr', HUF: 'Ft',
+  CZK: 'Kč', PLN: 'zł', HKD: 'HK$', SGD: 'S$', INR: '₹',
+  BRL: 'R$', TRY: '₺', ILS: '₪', ZAR: 'R',
+};
+
+function formatFee(cents?: number, currency = 'USD'): string {
   if (!cents) return '—';
-  return `$${(cents / 100).toFixed(0)}`;
+  const symbol = CURRENCY_SYMBOLS[currency] ?? currency;
+  const amount = (cents / 100).toFixed(0);
+  // Prefix symbols: $, €, £, ¥, ₩, ₹, ₺, ₪
+  const prefixed = new Set(['$', '€', '£', '¥', '₩', '₹', '₺', '₪', 'A$', 'C$', 'HK$', 'S$', 'R$']);
+  return prefixed.has(symbol) ? `${symbol}${amount}` : `${amount} ${symbol}`;
 }
 
 function formatDate(d?: string): string {
@@ -88,7 +124,7 @@ function SectionCard({
             <DeadlineBadge deadline={section.early_deadline} t={t} />
             <span>{formatDate(section.early_deadline)}</span>
             {section.entry_fee_early != null && (
-              <span style={{ color: '#4a5568', fontWeight: 600 }}>{formatFee(section.entry_fee_early)}</span>
+              <span style={{ color: '#4a5568', fontWeight: 600 }}>{formatFee(section.entry_fee_early, section.entry_currency)}</span>
             )}
           </div>
         )}
@@ -98,14 +134,30 @@ function SectionCard({
             <DeadlineBadge deadline={section.regular_deadline} t={t} />
             <span>{formatDate(section.regular_deadline)}</span>
             {section.entry_fee_regular != null && (
-              <span style={{ color: '#4a5568', fontWeight: 600 }}>{formatFee(section.entry_fee_regular)}</span>
+              <span style={{ color: '#4a5568', fontWeight: 600 }}>{formatFee(section.entry_fee_regular, section.entry_currency)}</span>
             )}
           </div>
         )}
         {section.late_deadline && (
-          <div style={{ fontSize: 12, color: '#718096', display: 'flex', gap: 6, alignItems: 'center' }}>
+          <div style={{ fontSize: 12, color: '#718096', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ minWidth: 70 }}>{ts.lateDeadline ?? 'Late'}:</span>
+            <DeadlineBadge deadline={section.late_deadline} t={t} />
             <span>{formatDate(section.late_deadline)}</span>
+            {section.entry_fee_late != null && (
+              <span style={{ color: '#4a5568', fontWeight: 600 }}>{formatFee(section.entry_fee_late, section.entry_currency)}</span>
+            )}
+          </div>
+        )}
+        {(section.short_film_min_min != null || section.short_film_max_min != null) && (
+          <div style={{ fontSize: 12, color: '#718096', display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
+            <span>🎞 {ts.shortFilmDuration ?? 'Short film'}:</span>
+            <span style={{ color: '#4a5568', fontWeight: 600 }}>
+              {section.short_film_min_min != null && section.short_film_max_min != null
+                ? `${section.short_film_min_min}–${section.short_film_max_min} min`
+                : section.short_film_min_min != null
+                ? `≥${section.short_film_min_min} min`
+                : `≤${section.short_film_max_min} min`}
+            </span>
           </div>
         )}
         {section.filmfreeway_url && (
@@ -123,12 +175,18 @@ function SectionCard({
 type SectionForm = {
   section_name: string; section_name_vi: string; category: string;
   early_deadline: string; regular_deadline: string; late_deadline: string;
-  entry_fee_early: string; entry_fee_regular: string; filmfreeway_url: string;
+  entry_fee_early: string; entry_fee_regular: string; entry_fee_late: string;
+  entry_currency: string;
+  filmfreeway_url: string;
+  short_film_min_min: string; short_film_max_min: string;
 };
 const emptySectionForm = (): SectionForm => ({
   section_name: '', section_name_vi: '', category: '',
   early_deadline: '', regular_deadline: '', late_deadline: '',
-  entry_fee_early: '', entry_fee_regular: '', filmfreeway_url: '',
+  entry_fee_early: '', entry_fee_regular: '', entry_fee_late: '',
+  entry_currency: 'USD',
+  filmfreeway_url: '',
+  short_film_min_min: '', short_film_max_min: '',
 });
 
 function AddSectionInline({
@@ -156,8 +214,9 @@ function AddSectionInline({
       const body: Record<string, unknown> = { festival_id: festivalId, ...form };
       if (form.entry_fee_early) body.entry_fee_early = Math.round(Number(form.entry_fee_early) * 100);
       if (form.entry_fee_regular) body.entry_fee_regular = Math.round(Number(form.entry_fee_regular) * 100);
-      delete (body as any).entry_fee_early_str;
-      delete (body as any).entry_fee_regular_str;
+      if (form.entry_fee_late) body.entry_fee_late = Math.round(Number(form.entry_fee_late) * 100);
+      if (form.short_film_min_min) body.short_film_min_min = Number(form.short_film_min_min);
+      if (form.short_film_max_min) body.short_film_max_min = Number(form.short_film_max_min);
       const res = await fetch(`${API_BASE}/festival-sections`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -217,16 +276,37 @@ function AddSectionInline({
         </div>
         <div />
         <div style={formRowStyle}>
-          <label style={labelStyle}>{ts.entryFeeEarly ?? 'Entry Fee Early (USD)'}</label>
+          <label style={labelStyle}>{ts.currency ?? 'Currency'}</label>
+          <select style={inputStyle} value={form.entry_currency} onChange={set('entry_currency')}>
+            {CURRENCIES.map((c) => (
+              <option key={c.code} value={c.code}>{c.label}</option>
+            ))}
+          </select>
+        </div>
+        <div />
+        <div style={formRowStyle}>
+          <label style={labelStyle}>{ts.entryFeeEarly ?? 'Entry Fee Early'}</label>
           <input style={inputStyle} type="number" min={0} value={form.entry_fee_early} onChange={set('entry_fee_early')} placeholder="0" />
         </div>
         <div style={formRowStyle}>
-          <label style={labelStyle}>{ts.entryFeeRegular ?? 'Entry Fee Regular (USD)'}</label>
+          <label style={labelStyle}>{ts.entryFeeRegular ?? 'Entry Fee Regular'}</label>
           <input style={inputStyle} type="number" min={0} value={form.entry_fee_regular} onChange={set('entry_fee_regular')} placeholder="0" />
+        </div>
+        <div style={formRowStyle}>
+          <label style={labelStyle}>{ts.entryFeeLate ?? 'Entry Fee Late'}</label>
+          <input style={inputStyle} type="number" min={0} value={form.entry_fee_late} onChange={set('entry_fee_late')} placeholder="0" />
         </div>
         <div style={formRowStyle}>
           <label style={labelStyle}>{ts.filmfreeway ?? 'FilmFreeway URL'}</label>
           <input style={inputStyle} type="url" value={form.filmfreeway_url} onChange={set('filmfreeway_url')} placeholder="https://filmfreeway.com/..." />
+        </div>
+        <div style={formRowStyle}>
+          <label style={labelStyle}>{ts.shortFilmMinMin ?? 'Short Film Min (min)'}</label>
+          <input style={inputStyle} type="number" min={0} value={form.short_film_min_min} onChange={set('short_film_min_min')} placeholder="e.g. 1" />
+        </div>
+        <div style={formRowStyle}>
+          <label style={labelStyle}>{ts.shortFilmMaxMin ?? 'Short Film Max (min)'}</label>
+          <input style={inputStyle} type="number" min={0} value={form.short_film_max_min} onChange={set('short_film_max_min')} placeholder="e.g. 30" />
         </div>
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
