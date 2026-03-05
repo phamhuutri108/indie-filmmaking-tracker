@@ -756,12 +756,20 @@ app.get('/api/festivals/:id/insights', async (c) => {
   const festivalId = Number(c.req.param('id'));
   if (isNaN(festivalId)) return c.json({ error: 'Invalid id' }, 400);
 
-  // Return cached insights if available
+  // Return cached insights if available (and bilingual if lang=vi)
   const cached = await c.env.DB.prepare(
     `SELECT * FROM festival_insights WHERE festival_id = ?`
   ).bind(festivalId).first<Record<string, unknown>>();
 
-  if (cached) return c.json({ data: cached, cached: true });
+  // Serve cache only when it already has _vi content (or lang is not vi)
+  const needVi = c.req.query('lang') === 'vi';
+  if (cached && (!needVi || cached.summary_vi)) {
+    return c.json({ data: cached, cached: true });
+  }
+  // If cached but missing _vi, delete it so we regenerate with bilingual prompt
+  if (cached) {
+    await c.env.DB.prepare(`DELETE FROM festival_insights WHERE festival_id = ?`).bind(festivalId).run();
+  }
 
   // Load festival data
   const festival = await c.env.DB.prepare(

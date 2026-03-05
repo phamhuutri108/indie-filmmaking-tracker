@@ -592,7 +592,7 @@ export function FestivalProfile({
   // Load AI insights
   const loadInsights = () => {
     setInsightsLoading(true);
-    fetch(`${API_BASE}/festivals/${festivalId}/insights`)
+    fetch(`${API_BASE}/festivals/${festivalId}/insights${lang === 'vi' ? '?lang=vi' : ''}`)
       .then((r) => r.json() as Promise<{ data: Record<string, unknown>; cached: boolean }>)
       .then((d) => setInsights(parseInsights(d.data)))
       .catch(() => {})
