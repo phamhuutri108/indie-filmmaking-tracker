@@ -38,6 +38,11 @@ export interface FestivalInsights {
   eligibility?: string;
   industry_presence?: string;
   tips?: string;
+  summary_vi?: string;
+  what_they_look_for_vi?: string;
+  eligibility_vi?: string;
+  industry_presence_vi?: string;
+  tips_vi?: string;
   past_selections: PastFilm[];
   prizes: FestivalPrize[];
   useful_links: UsefulLink[];

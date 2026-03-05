@@ -22,10 +22,17 @@ function nameToHue(name: string): number {
   return Math.abs(hash) % 360;
 }
 
+const AGGREGATOR_DOMAINS = new Set([
+  'asianfilmfestivals.com', 'filmfreeway.com', 'withoutabox.com',
+  'festhome.com', 'filmfestivallife.com', 'shortfilmdepot.com',
+]);
+
 function getDomain(url?: string): string | null {
   if (!url) return null;
-  try { return new URL(url.startsWith('http') ? url : `https://${url}`).hostname.replace(/^www\./, ''); }
-  catch { return null; }
+  try {
+    const host = new URL(url.startsWith('http') ? url : `https://${url}`).hostname.replace(/^www\./, '');
+    return AGGREGATOR_DOMAINS.has(host) ? null : host;
+  } catch { return null; }
 }
 
 function formatDeadline(f: Festival): { label: string; date: string } | null {

@@ -41,6 +41,53 @@ function badge(color: string, text: string) {
   );
 }
 
+// ─── Festival Avatar ──────────────────────────────────────────────────────────
+const AGGREGATOR_DOMAINS_P = new Set([
+  'asianfilmfestivals.com', 'filmfreeway.com', 'withoutabox.com',
+  'festhome.com', 'filmfestivallife.com', 'shortfilmdepot.com',
+]);
+
+function getFestivalDomain(url?: string): string | null {
+  if (!url) return null;
+  try {
+    const host = new URL(url.startsWith('http') ? url : `https://${url}`).hostname.replace(/^www\./, '');
+    return AGGREGATOR_DOMAINS_P.has(host) ? null : host;
+  } catch { return null; }
+}
+
+function FestivalAvatar({ name, website, size = 48 }: { name: string; website?: string; size?: number }) {
+  const [ok, setOk] = useState(false);
+  const domain = getFestivalDomain(website);
+  const faviconUrl = domain
+    ? `https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=256`
+    : null;
+  const initials = name.split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  const hue = Math.abs(hash) % 360;
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: size / 2,
+      background: `linear-gradient(135deg, hsl(${hue},55%,80%) 0%, hsl(${hue},45%,65%) 100%)`,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      overflow: 'hidden', flexShrink: 0, position: 'relative',
+      border: '2px solid rgba(255,255,255,0.35)',
+    }}>
+      <span style={{
+        fontSize: size * 0.33, fontWeight: 900, color: `hsl(${hue},40%,30%)`,
+        position: 'absolute', opacity: ok ? 0 : 1, transition: 'opacity 0.2s',
+        userSelect: 'none',
+      }}>{initials}</span>
+      {faviconUrl && (
+        <img src={faviconUrl} alt="" onLoad={() => setOk(true)} onError={() => setOk(false)}
+          style={{ width: '80%', height: '80%', objectFit: 'contain', position: 'absolute',
+            opacity: ok ? 1 : 0, transition: 'opacity 0.2s' }}
+        />
+      )}
+    </div>
+  );
+}
+
 function safeParseJson<T>(str?: string | null, fallback: T = [] as unknown as T): T {
   if (!str) return fallback;
   try { return JSON.parse(str) as T; } catch { return fallback; }
@@ -55,6 +102,11 @@ function parseInsights(raw: Record<string, unknown>): FestivalInsights {
     eligibility: raw.eligibility as string | undefined,
     industry_presence: raw.industry_presence as string | undefined,
     tips: raw.tips as string | undefined,
+    summary_vi: raw.summary_vi as string | undefined,
+    what_they_look_for_vi: raw.what_they_look_for_vi as string | undefined,
+    eligibility_vi: raw.eligibility_vi as string | undefined,
+    industry_presence_vi: raw.industry_presence_vi as string | undefined,
+    tips_vi: raw.tips_vi as string | undefined,
     past_selections: safeParseJson<PastFilm[]>(raw.past_selections as string | null, []),
     prizes: safeParseJson(raw.prizes as string | null, []),
     useful_links: safeParseJson(raw.useful_links as string | null, []),
@@ -141,13 +193,15 @@ function NarrativeBlock({ label, text }: { label: string; text?: string }) {
 }
 
 // ─── Overview Tab ─────────────────────────────────────────────────────────────
-function OverviewTab({ festival, insights, insightsLoading, tp, t }: {
+function OverviewTab({ festival, insights, insightsLoading, tp, t, lang }: {
   festival: Festival;
   insights: FestivalInsights | null;
   insightsLoading: boolean;
   tp: Record<string, string>;
   t: ReturnType<typeof useI18n>;
+  lang: Lang;
 }) {
+  const vi = lang === 'vi';
   if (insightsLoading) {
     return (
       <div style={{ textAlign: 'center', padding: '40px 0', color: '#718096' }}>
@@ -166,14 +220,14 @@ function OverviewTab({ festival, insights, insightsLoading, tp, t }: {
     <div>
       <ConfidenceBanner confidence={insights.confidence} tp={tp} />
 
-      <NarrativeBlock label={tp.about ?? 'About'} text={insights.summary} />
+      <NarrativeBlock label={tp.about ?? 'About'} text={vi && insights.summary_vi ? insights.summary_vi : insights.summary} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginBottom: 20 }}>
         <div>
-          <NarrativeBlock label={tp.whatTheyLookFor ?? 'What They Look For'} text={insights.what_they_look_for} />
+          <NarrativeBlock label={tp.whatTheyLookFor ?? 'What They Look For'} text={vi && insights.what_they_look_for_vi ? insights.what_they_look_for_vi : insights.what_they_look_for} />
         </div>
         <div>
-          <NarrativeBlock label={tp.eligibility ?? 'Eligibility'} text={insights.eligibility} />
+          <NarrativeBlock label={tp.eligibility ?? 'Eligibility'} text={vi && insights.eligibility_vi ? insights.eligibility_vi : insights.eligibility} />
         </div>
       </div>
 
@@ -198,8 +252,8 @@ function OverviewTab({ festival, insights, insightsLoading, tp, t }: {
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginBottom: 20 }}>
-        <NarrativeBlock label={tp.industryPresence ?? 'Industry Presence'} text={insights.industry_presence} />
-        <NarrativeBlock label={tp.tips ?? 'Tips for Applying'} text={insights.tips} />
+        <NarrativeBlock label={tp.industryPresence ?? 'Industry Presence'} text={vi && insights.industry_presence_vi ? insights.industry_presence_vi : insights.industry_presence} />
+        <NarrativeBlock label={tp.tips ?? 'Tips for Applying'} text={vi && insights.tips_vi ? insights.tips_vi : insights.tips} />
       </div>
 
       {/* Website links */}
@@ -601,7 +655,9 @@ export function FestivalProfile({
         </button>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+            <FestivalAvatar name={festival.name} website={festival.website} size={56} />
+            <div>
             <h1 style={{ fontSize: 26, fontWeight: 800, margin: '0 0 4px', lineHeight: 1.2 }}>
               {lang === 'vi' && festival.name_vi ? festival.name_vi : festival.name}
             </h1>
@@ -631,6 +687,7 @@ export function FestivalProfile({
                   AI: {insights.confidence} confidence
                 </span>
               )}
+            </div>
             </div>
           </div>
 
@@ -664,7 +721,7 @@ export function FestivalProfile({
       {/* ── Tab content ── */}
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '28px 24px' }}>
         {subTab === 'overview' && (
-          <OverviewTab festival={festival} insights={insights} insightsLoading={insightsLoading} tp={tp} t={t} />
+          <OverviewTab festival={festival} insights={insights} insightsLoading={insightsLoading} tp={tp} t={t} lang={lang} />
         )}
         {subTab === 'sections' && (
           <SectionsTab

@@ -41,6 +41,11 @@ export interface FestivalInsightsAI {
   eligibility: string;
   industry_presence: string;
   tips: string;
+  summary_vi: string;
+  what_they_look_for_vi: string;
+  eligibility_vi: string;
+  industry_presence_vi: string;
+  tips_vi: string;
   past_selections: PastFilm[];
   prizes: FestivalPrize[];
   useful_links: UsefulLink[];
@@ -81,10 +86,15 @@ Respond ONLY with valid JSON matching this exact structure (no markdown, no expl
 {
   "confidence": "high",
   "summary": "2-3 paragraph narrative about the festival's identity, history, reputation, and significance to the global film community...",
+  "summary_vi": "Bản dịch tiếng Việt của summary...",
   "what_they_look_for": "Paragraph describing curatorial taste: thematic focus, aesthetic preferences, what kind of stories they champion, common threads in programming, filmmaker profiles they tend to select...",
+  "what_they_look_for_vi": "Bản dịch tiếng Việt của what_they_look_for...",
   "eligibility": "Paragraph covering premiere requirements (world/international/regional/Asian etc), nationality or citizenship restrictions if any, film length and type constraints, completion year requirements, language/subtitle requirements, submission window timing...",
+  "eligibility_vi": "Bản dịch tiếng Việt của eligibility...",
   "industry_presence": "Paragraph about buyers, sales agents, distributors present, press and trade media coverage, any attached industry market or forum, co-production meetings, networking opportunities for filmmakers...",
+  "industry_presence_vi": "Bản dịch tiếng Việt của industry_presence...",
   "tips": "Paragraph of practical application advice specific to this festival: which section to enter, how to make your submission stand out, common mistakes applicants make, optimal timing, DCP vs digital requirements if known...",
+  "tips_vi": "Bản dịch tiếng Việt của tips...",
   "past_selections": [
     {
       "year": 2023,
@@ -124,7 +134,8 @@ Rules:
 - prizes: list ALL prizes you know about including non-cash ones; set amount_usd to null if unknown
 - acceptance_stats: set to null if you don't know real numbers — never guess submission counts
 - useful_links: always include Wikipedia, IMDb Events page, and official website if you know them
-- All text must be useful to an independent filmmaker deciding whether to submit their film`;
+- All text must be useful to an independent filmmaker deciding whether to submit their film
+- For every narrative field (summary, what_they_look_for, eligibility, industry_presence, tips), also provide a Vietnamese translation in the corresponding _vi field. Write natural, professional Vietnamese — do not machine-translate word for word`;
 
   const res = await fetch(ANTHROPIC_API_URL, {
     method: 'POST',
@@ -160,6 +171,11 @@ Rules:
       eligibility: parsed.eligibility ?? '',
       industry_presence: parsed.industry_presence ?? '',
       tips: parsed.tips ?? '',
+      summary_vi: parsed.summary_vi ?? '',
+      what_they_look_for_vi: parsed.what_they_look_for_vi ?? '',
+      eligibility_vi: parsed.eligibility_vi ?? '',
+      industry_presence_vi: parsed.industry_presence_vi ?? '',
+      tips_vi: parsed.tips_vi ?? '',
       past_selections: Array.isArray(parsed.past_selections) ? parsed.past_selections : [],
       prizes: Array.isArray(parsed.prizes) ? parsed.prizes : [],
       useful_links: Array.isArray(parsed.useful_links) ? parsed.useful_links : [],
@@ -174,6 +190,11 @@ Rules:
       eligibility: '',
       industry_presence: '',
       tips: '',
+      summary_vi: '',
+      what_they_look_for_vi: '',
+      eligibility_vi: '',
+      industry_presence_vi: '',
+      tips_vi: '',
       past_selections: [],
       prizes: [],
       useful_links: festival.website ? [{ label: 'Official Website', url: festival.website, type: 'official' }] : [],

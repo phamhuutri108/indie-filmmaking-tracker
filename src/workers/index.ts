@@ -778,8 +778,9 @@ app.get('/api/festivals/:id/insights', async (c) => {
   await c.env.DB.prepare(`
     INSERT INTO festival_insights
       (festival_id, summary, what_they_look_for, eligibility, industry_presence,
-       tips, past_selections, prizes, useful_links, acceptance_stats, confidence, model_used)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       tips, summary_vi, what_they_look_for_vi, eligibility_vi, industry_presence_vi, tips_vi,
+       past_selections, prizes, useful_links, acceptance_stats, confidence, model_used)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     festivalId,
     insights.summary,
@@ -787,6 +788,11 @@ app.get('/api/festivals/:id/insights', async (c) => {
     insights.eligibility,
     insights.industry_presence,
     insights.tips,
+    insights.summary_vi,
+    insights.what_they_look_for_vi,
+    insights.eligibility_vi,
+    insights.industry_presence_vi,
+    insights.tips_vi,
     JSON.stringify(insights.past_selections),
     JSON.stringify(insights.prizes),
     JSON.stringify(insights.useful_links),
