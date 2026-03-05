@@ -27,6 +27,10 @@ export interface ParsedFestival {
   festival_dates: string | null;
   description: string;
   source: 'rss';
+  fee_early: number | null;    // cents
+  fee_regular: number | null;  // cents
+  fee_late: number | null;     // cents
+  entry_currency: string;      // ISO 4217, e.g. 'USD', 'EUR', 'CHF'
 }
 
 export interface ScrapeResult {
@@ -287,6 +291,81 @@ function extractFestivalDates(content: string): string | null {
   return m ? m[1].replace(/\s+in\s+.*/i, '').trim() : null;
 }
 
+/**
+ * Extract entry fees from content HTML.
+ * Looks for "Entry Fee:" / "Submission Fee:" sections and parses
+ * early/regular/late tiers and currency (CHF, EUR, GBP, etc.).
+ * Returns amounts in cents.
+ */
+function extractFees(content: string): {
+  fee_early: number | null;
+  fee_regular: number | null;
+  fee_late: number | null;
+  currency: string;
+} {
+  const none = { fee_early: null, fee_regular: null, fee_late: null, currency: 'USD' };
+  const text = stripHtml(content);
+
+  // Free / no fee
+  if (/no\s+entry\s+fee|free\s+(?:submission|entry|to\s+submit)|entry\s+fee\s*:\s*free/i.test(text)) {
+    return none;
+  }
+
+  // Find fee section
+  const feeIdx = text.search(/(?:entry|submission)\s+fee[s]?\s*:/i);
+  if (feeIdx === -1) return none;
+
+  const section = text.slice(feeIdx, feeIdx + 600);
+
+  // Detect currency (order matters: specific codes before generic $)
+  let currency = 'USD';
+  if (/\bCHF\b/i.test(section)) currency = 'CHF';
+  else if (/€|\bEUR\b/i.test(section)) currency = 'EUR';
+  else if (/£|\bGBP\b/i.test(section)) currency = 'GBP';
+  else if (/\bA\$|\bAUD\b/i.test(section)) currency = 'AUD';
+  else if (/\bCA\$|\bCAD\b/i.test(section)) currency = 'CAD';
+  else if (/\bHK\$|\bHKD\b/i.test(section)) currency = 'HKD';
+  else if (/\bS\$|\bSGD\b/i.test(section)) currency = 'SGD';
+  else if (/₩|\bKRW\b/i.test(section)) currency = 'KRW';
+  else if (/¥|\bJPY\b|\bCNY\b/i.test(section)) currency = 'JPY';
+  else if (/\bNOK\b|\bSEK\b|\bDKK\b/i.test(section)) currency = 'SEK';
+
+  // Amount pattern: optional symbol + number, or number + code
+  const amtPat = '(?:[€$£¥₩]|CHF|USD|EUR|GBP|AUD|CAD|HKD|SGD|JPY|KRW|NOK|SEK|DKK)?\\s*(\\d+(?:\\.\\d{1,2})?)\\s*(?:CHF|USD|EUR|GBP|AUD|CAD|HKD|SGD|JPY|KRW|NOK|SEK|DKK)?';
+
+  const earlyRe  = new RegExp(`early(?:\\s*bird)?\\s*[:\\-–]\\s*${amtPat}`, 'i');
+  const regularRe = new RegExp(`regular\\s*[:\\-–]\\s*${amtPat}`, 'i');
+  const lateRe   = new RegExp(`late\\s*[:\\-–]\\s*${amtPat}`, 'i');
+
+  const earlyMatch   = section.match(earlyRe);
+  const regularMatch = section.match(regularRe);
+  const lateMatch    = section.match(lateRe);
+
+  if (earlyMatch || regularMatch || lateMatch) {
+    return {
+      fee_early:   earlyMatch   ? Math.round(parseFloat(earlyMatch[1])   * 100) : null,
+      fee_regular: regularMatch ? Math.round(parseFloat(regularMatch[1]) * 100) : null,
+      fee_late:    lateMatch    ? Math.round(parseFloat(lateMatch[1])    * 100) : null,
+      currency,
+    };
+  }
+
+  // Single fee amount (no tiers)
+  const singleRe = new RegExp(
+    '(?:[€$£¥₩]|CHF|USD|EUR|GBP|AUD|CAD|HKD|SGD|JPY|KRW|NOK|SEK|DKK)\\s*(\\d+(?:\\.\\d{1,2})?)' +
+    '|(\\d+(?:\\.\\d{1,2})?)\\s*(?:CHF|USD|EUR|GBP|AUD|CAD|HKD|SGD|JPY|KRW|NOK|SEK|DKK)', 'i'
+  );
+  const singleMatch = section.match(singleRe);
+  if (singleMatch) {
+    const amt = parseFloat(singleMatch[1] ?? singleMatch[2]);
+    if (!isNaN(amt) && amt > 0 && amt < 10000) {
+      return { fee_early: null, fee_regular: Math.round(amt * 100), fee_late: null, currency };
+    }
+  }
+
+  return none;
+}
+
 /** Infer film category from RSS category tags and/or content text. */
 function inferCategory(categories: string[], content: string): string | null {
   const tags = categories.map((c) => c.toLowerCase());
@@ -353,6 +432,7 @@ export function parseFestivalItem(item: RssItem): ParsedFestival | null {
 
   const { early, regular } = extractDeadlines(item.content, item.description, year);
   const { website, filmfreeway } = extractSubmissionUrls(item.content, item.link);
+  const { fee_early, fee_regular, fee_late, currency } = extractFees(item.content);
 
   return {
     name,
@@ -366,6 +446,10 @@ export function parseFestivalItem(item: RssItem): ParsedFestival | null {
     festival_dates: extractFestivalDates(item.content),
     description: item.description,
     source: 'rss',
+    fee_early,
+    fee_regular,
+    fee_late,
+    entry_currency: currency,
   };
 }
 
@@ -401,16 +485,22 @@ export async function saveFestivals(
         await db.prepare(`
           INSERT INTO festival_sections
             (festival_id, section_name, category, early_deadline, regular_deadline,
-             filmfreeway_url, notification_date, source)
-          VALUES (?, 'General', ?, ?, ?, ?, ?, ?)
+             filmfreeway_url, notification_date, source,
+             entry_fee_early, entry_fee_regular, entry_fee_late, entry_currency)
+          VALUES (?, 'General', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(festival_id, section_name) DO UPDATE SET
             category = excluded.category,
             early_deadline = excluded.early_deadline,
             regular_deadline = excluded.regular_deadline,
-            filmfreeway_url = COALESCE(excluded.filmfreeway_url, filmfreeway_url)
+            filmfreeway_url = COALESCE(excluded.filmfreeway_url, filmfreeway_url),
+            entry_fee_early = COALESCE(excluded.entry_fee_early, entry_fee_early),
+            entry_fee_regular = COALESCE(excluded.entry_fee_regular, entry_fee_regular),
+            entry_fee_late = COALESCE(excluded.entry_fee_late, entry_fee_late),
+            entry_currency = COALESCE(excluded.entry_currency, entry_currency)
         `).bind(
           existing.id, f.category, f.early_deadline, f.regular_deadline,
-          f.filmfreeway_url, f.notification_date, f.source
+          f.filmfreeway_url, f.notification_date, f.source,
+          f.fee_early, f.fee_regular, f.fee_late, f.entry_currency
         ).run();
         skipped++;
         continue;
@@ -436,11 +526,13 @@ export async function saveFestivals(
       await db.prepare(`
         INSERT OR IGNORE INTO festival_sections
           (festival_id, section_name, category, early_deadline, regular_deadline,
-           filmfreeway_url, notification_date, source)
-        VALUES (?, 'General', ?, ?, ?, ?, ?, ?)
+           filmfreeway_url, notification_date, source,
+           entry_fee_early, entry_fee_regular, entry_fee_late, entry_currency)
+        VALUES (?, 'General', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         festivalId, f.category, f.early_deadline, f.regular_deadline,
-        f.filmfreeway_url, f.notification_date, f.source
+        f.filmfreeway_url, f.notification_date, f.source,
+        f.fee_early, f.fee_regular, f.fee_late, f.entry_currency
       ).run();
 
       saved++;
@@ -527,6 +619,7 @@ export function parseCineuropaItem(item: RssItem): ParsedFestival | null {
   if (!name || name.length < 4) return null;
 
   const { early, regular } = extractDeadlines(item.content, item.description, year);
+  const { fee_early, fee_regular, fee_late, currency } = extractFees(item.content);
 
   return {
     name,
@@ -540,6 +633,10 @@ export function parseCineuropaItem(item: RssItem): ParsedFestival | null {
     festival_dates: null,
     description: stripHtml(item.description).slice(0, 300),
     source: 'rss',
+    fee_early,
+    fee_regular,
+    fee_late,
+    entry_currency: currency,
   };
 }
 
