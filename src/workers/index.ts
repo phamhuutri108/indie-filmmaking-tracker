@@ -698,7 +698,7 @@ app.get('/api/scrape', async (c) => {
 });
 
 // Background fee enrichment for existing festivals with no fees
-app.get('/api/festivals/enrich-fees', async (c) => {
+app.get('/api/enrich-fees', async (c) => {
   const db = c.env.DB;
   const apiKey = c.env.ANTHROPIC_API_KEY;
 
@@ -707,13 +707,16 @@ app.get('/api/festivals/enrich-fees', async (c) => {
     FROM festivals f
     JOIN festival_sections s ON s.festival_id = f.id
     WHERE s.entry_fee_regular IS NULL AND s.entry_fee_early IS NULL
-    LIMIT 30
+    ORDER BY RANDOM()
+    LIMIT 5
   `).all<{ id: number; name: string; country: string | null; section_id: number }>();
 
   const festivals = rows.results;
+  const updated: string[] = [];
 
-  c.executionCtx.waitUntil((async () => {
-    for (const fest of festivals) {
+  // Run synchronously — 5 parallel searches, results saved before response
+  await Promise.allSettled(
+    festivals.map(async (fest) => {
       try {
         const fees = await searchFestivalFeeWithAI(fest.name, fest.country, apiKey);
         if (fees.fee_early !== null || fees.fee_regular !== null || fees.fee_late !== null) {
@@ -722,16 +725,15 @@ app.get('/api/festivals/enrich-fees', async (c) => {
             SET entry_fee_early = ?, entry_fee_regular = ?, entry_fee_late = ?, entry_currency = ?
             WHERE id = ?
           `).bind(fees.fee_early, fees.fee_regular, fees.fee_late, fees.currency, fest.section_id).run();
-          console.log(`[EnrichFees] "${fest.name}": ${JSON.stringify(fees)}`);
+          updated.push(`${fest.name}: ${JSON.stringify(fees)}`);
         }
       } catch (e) {
         console.error(`[EnrichFees] Failed for "${fest.name}":`, e);
       }
-    }
-    console.log('[EnrichFees] Done');
-  })());
+    })
+  );
 
-  return c.json({ started: true, count: festivals.length, ts: new Date().toISOString() });
+  return c.json({ processed: festivals.length, updated: updated.length, fees: updated, ts: new Date().toISOString() });
 });
 
 app.get('/api/funds/scrape', async (c) => {

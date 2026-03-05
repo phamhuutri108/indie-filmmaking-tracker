@@ -465,7 +465,7 @@ export async function searchFestivalFeeWithAI(
     role: 'user',
     content: `Search for the current entry/submission fee for "${festivalName}" film festival${country ? ` (${country})` : ''}. Return ONLY this JSON, no explanation:
 {"fee_early":null,"fee_regular":null,"fee_late":null,"currency":"USD"}
-Rules: amounts in cents (integer, e.g. $25→2500), ISO 4217 currency, null if not found.`,
+Rules: amounts in dollars as a number (e.g. $25→25, €10→10), ISO 4217 currency code, null if not found.`,
   }];
 
   for (let i = 0; i < 3; i++) {
@@ -484,6 +484,12 @@ Rules: amounts in cents (integer, e.g. $25→2500), ISO 4217 currency, null if n
           messages,
         }),
       });
+      // On rate limit, wait and retry
+      if (res.status === 429) {
+        const retryAfter = parseInt(res.headers.get('retry-after') ?? '30', 10);
+        await new Promise((r) => setTimeout(r, retryAfter * 1000));
+        continue;
+      }
       if (!res.ok) return none;
 
       const data = await res.json() as {
@@ -492,15 +498,22 @@ Rules: amounts in cents (integer, e.g. $25→2500), ISO 4217 currency, null if n
       };
 
       if (data.stop_reason === 'end_turn') {
-        const text = data.content?.find((b) => b.type === 'text')?.text ?? '';
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        // Concatenate ALL text blocks (JSON often appears in a later block)
+        const text = (data.content ?? [])
+          .filter((b) => b.type === 'text')
+          .map((b) => (b as { text: string }).text)
+          .join('\n');
+        const jsonMatch = text.match(/\{[\s\S]*?\}/);
         if (!jsonMatch) return none;
         const p = JSON.parse(jsonMatch[0]);
+        // Model returns dollar amounts — convert to cents
+        const toCents = (v: unknown) =>
+          typeof v === 'number' && v > 0 ? Math.round(v * 100) : null;
         return {
-          fee_early:   typeof p.fee_early   === 'number' ? Math.round(p.fee_early)   : null,
-          fee_regular: typeof p.fee_regular === 'number' ? Math.round(p.fee_regular) : null,
-          fee_late:    typeof p.fee_late    === 'number' ? Math.round(p.fee_late)    : null,
-          currency:    typeof p.currency    === 'string' && p.currency.length >= 3 ? p.currency.toUpperCase() : 'USD',
+          fee_early:   toCents(p.fee_early),
+          fee_regular: toCents(p.fee_regular),
+          fee_late:    toCents(p.fee_late),
+          currency:    typeof p.currency === 'string' && p.currency.length >= 3 ? p.currency.toUpperCase() : 'USD',
         };
       }
 
