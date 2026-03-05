@@ -601,11 +601,13 @@ function AddFestivalModal({
 // ─── Main FestivalList ────────────────────────────────────────────────────────
 const PER_PAGE = 20;
 
-export function FestivalList({ t, isOwner, isLoggedIn, onOpenProfile }: {
+export function FestivalList({ t, isOwner, isLoggedIn, onOpenProfile, defaultOpenId, onDefaultOpened }: {
   t: ReturnType<typeof useI18n>;
   isOwner: boolean;
   isLoggedIn: boolean;
   onOpenProfile?: (id: number, name: string) => void;
+  defaultOpenId?: number | null;
+  onDefaultOpened?: () => void;
 }) {
   const [items, setItems] = useState<Festival[]>([]);
   const [loading, setLoading] = useState(true);
@@ -672,6 +674,22 @@ export function FestivalList({ t, isOwner, isLoggedIn, onOpenProfile }: {
   };
 
   useEffect(() => { load(); loadWatchlist(); }, []);
+
+  // Reopen a specific festival panel when returning from its profile page
+  useEffect(() => {
+    if (!defaultOpenId || items.length === 0) return;
+    const f = items.find(item => item.id === defaultOpenId);
+    if (f) {
+      openDetail(f);
+      onDefaultOpened?.();
+      // Restore scroll position saved before navigating to profile
+      const saved = sessionStorage.getItem('fl-scrollY');
+      if (saved) {
+        sessionStorage.removeItem('fl-scrollY');
+        setTimeout(() => window.scrollTo({ top: parseInt(saved), behavior: 'instant' as ScrollBehavior }), 30);
+      }
+    }
+  }, [defaultOpenId, items]);
 
   // Reset to page 1 whenever filters change
   useEffect(() => { setPage(1); }, [search, catFilter, tierFilter, prestigeFilter, genreFilter]);

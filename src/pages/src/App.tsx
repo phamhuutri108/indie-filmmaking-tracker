@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useI18n, type Lang } from './i18n';
 import { Home } from './components/Home';
 import { Dashboard } from './components/Dashboard';
@@ -57,6 +57,8 @@ export default function App() {
   );
   const [tab, setTab] = useState<Tab>(tabFromPath);
   const [selectedFestivalId, setSelectedFestivalId] = useState<number | null>(festivalIdFromPath);
+  const [returnFestivalId, setReturnFestivalId] = useState<number | null>(null);
+  const profileSourceRef = useRef<Tab>('festivals');
   const [showUsers, setShowUsers] = useState(false);
   const [showSignIn, setShowSignIn] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -108,6 +110,10 @@ export default function App() {
   };
 
   const handleOpenFestivalProfile = (id: number, name?: string) => {
+    profileSourceRef.current = tab;
+    // Save scroll position for the source tab
+    if (tab === 'festivals') sessionStorage.setItem('fl-scrollY', String(window.scrollY));
+    // FestivalInformation saves its own scrollY before calling this
     const slug = name ? slugify(name) : String(id);
     window.history.pushState({}, '', `/festivals-information/${id}/${slug}`);
     setTab('festival-information');
@@ -115,9 +121,17 @@ export default function App() {
   };
 
   const handleCloseFestivalProfile = () => {
-    window.history.pushState({}, '', '/festivals');
-    setTab('festivals');
+    const source = profileSourceRef.current;
     setSelectedFestivalId(null);
+    if (source === 'festival-information') {
+      window.history.pushState({}, '', '/festivals-information');
+      setTab('festival-information');
+    } else {
+      // Return to festivals tab and reopen the detail panel
+      setReturnFestivalId(selectedFestivalId);
+      window.history.pushState({}, '', '/festivals');
+      setTab('festivals');
+    }
   };
 
   const handleAuthClose = () => {
@@ -282,7 +296,7 @@ export default function App() {
       }}>
         {tab === 'home'               && <Home lang={lang} />}
         {tab === 'dashboard'          && <Dashboard t={t} isLoggedIn={isLoggedIn} />}
-        {tab === 'festivals'          && <FestivalList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} onOpenProfile={handleOpenFestivalProfile} />}
+        {tab === 'festivals'          && <FestivalList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} onOpenProfile={handleOpenFestivalProfile} defaultOpenId={returnFestivalId} onDefaultOpened={() => setReturnFestivalId(null)} />}
         {tab === 'funds'              && <FundList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} />}
         {tab === 'education'          && <EducationList t={t} isOwner={isOwner} isLoggedIn={isLoggedIn} />}
         {tab === 'festival-information' && (
