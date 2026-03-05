@@ -55,19 +55,38 @@ function getFestivalDomain(url?: string): string | null {
   } catch { return null; }
 }
 
+// favicon sources tried in order; first that loads a real icon wins
+function buildFaviconSources(domain: string): string[] {
+  return [
+    `https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=256`,
+    `https://icons.duckduckgo.com/ip3/${domain}.ico`,
+    `https://${domain}/favicon.ico`,
+  ];
+}
+
 function FestivalAvatar({ name, website, size = 48 }: { name: string; website?: string; size?: number }) {
+  const [srcIdx, setSrcIdx] = useState(0);
   const [ok, setOk] = useState(false);
   const domain = getFestivalDomain(website);
-  const faviconUrl = domain
-    ? `https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=256`
-    : null;
+  const sources = domain ? buildFaviconSources(domain) : [];
   const initials = name.split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
   const hue = Math.abs(hash) % 360;
+
+  const handleLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    // Reject tiny fallback globe icons (≤32px means it's the generic placeholder)
+    if (e.currentTarget.naturalWidth > 32) { setOk(true); }
+    else { handleError(); }
+  };
+  const handleError = () => {
+    if (srcIdx + 1 < sources.length) setSrcIdx(i => i + 1);
+    // else stay hidden → show initials
+  };
+
   return (
     <div style={{
-      width: size, height: size, borderRadius: size / 2,
+      width: size, height: size, borderRadius: Math.round(size * 0.18),
       background: `linear-gradient(135deg, hsl(${hue},55%,80%) 0%, hsl(${hue},45%,65%) 100%)`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       overflow: 'hidden', flexShrink: 0, position: 'relative',
@@ -78,8 +97,9 @@ function FestivalAvatar({ name, website, size = 48 }: { name: string; website?: 
         position: 'absolute', opacity: ok ? 0 : 1, transition: 'opacity 0.2s',
         userSelect: 'none',
       }}>{initials}</span>
-      {faviconUrl && (
-        <img src={faviconUrl} alt="" onLoad={() => setOk(true)} onError={() => setOk(false)}
+      {sources[srcIdx] && (
+        <img key={srcIdx} src={sources[srcIdx]} alt=""
+          onLoad={handleLoad} onError={handleError}
           style={{ width: '80%', height: '80%', objectFit: 'contain', position: 'absolute',
             opacity: ok ? 1 : 0, transition: 'opacity 0.2s' }}
         />
@@ -656,7 +676,7 @@ export function FestivalProfile({
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-            <FestivalAvatar name={festival.name} website={festival.website} size={56} />
+            <FestivalAvatar name={festival.name} website={festival.website} size={72} />
             <div>
             <h1 style={{ fontSize: 26, fontWeight: 800, margin: '0 0 4px', lineHeight: 1.2 }}>
               {lang === 'vi' && festival.name_vi ? festival.name_vi : festival.name}

@@ -85,16 +85,16 @@ Respond ONLY with valid JSON matching this exact structure (no markdown, no expl
 
 {
   "confidence": "high",
-  "summary": "2-3 paragraph narrative about the festival's identity, history, reputation, and significance to the global film community...",
-  "summary_vi": "Bản dịch tiếng Việt của summary...",
-  "what_they_look_for": "Paragraph describing curatorial taste: thematic focus, aesthetic preferences, what kind of stories they champion, common threads in programming, filmmaker profiles they tend to select...",
-  "what_they_look_for_vi": "Bản dịch tiếng Việt của what_they_look_for...",
-  "eligibility": "Paragraph covering premiere requirements (world/international/regional/Asian etc), nationality or citizenship restrictions if any, film length and type constraints, completion year requirements, language/subtitle requirements, submission window timing...",
-  "eligibility_vi": "Bản dịch tiếng Việt của eligibility...",
-  "industry_presence": "Paragraph about buyers, sales agents, distributors present, press and trade media coverage, any attached industry market or forum, co-production meetings, networking opportunities for filmmakers...",
-  "industry_presence_vi": "Bản dịch tiếng Việt của industry_presence...",
-  "tips": "Paragraph of practical application advice specific to this festival: which section to enter, how to make your submission stand out, common mistakes applicants make, optimal timing, DCP vs digital requirements if known...",
-  "tips_vi": "Bản dịch tiếng Việt của tips...",
+  "summary": "2-3 paragraph narrative about the festival's identity, history, reputation, and significance to the global film community.",
+  "summary_vi": "Viết lại summary ở trên bằng tiếng Việt tự nhiên, chuyên nghiệp (không dịch máy từng từ).",
+  "what_they_look_for": "Paragraph describing curatorial taste: thematic focus, aesthetic preferences, what kind of stories they champion, common threads in programming, filmmaker profiles they tend to select.",
+  "what_they_look_for_vi": "Viết lại what_they_look_for ở trên bằng tiếng Việt tự nhiên.",
+  "eligibility": "Paragraph covering premiere requirements, nationality restrictions, film length and type constraints, completion year requirements, language/subtitle requirements, submission window timing.",
+  "eligibility_vi": "Viết lại eligibility ở trên bằng tiếng Việt tự nhiên.",
+  "industry_presence": "Paragraph about buyers, sales agents, distributors present, press and trade media coverage, any attached industry market or forum, networking opportunities for filmmakers.",
+  "industry_presence_vi": "Viết lại industry_presence ở trên bằng tiếng Việt tự nhiên.",
+  "tips": "Paragraph of practical application advice specific to this festival: which section to enter, how to stand out, common mistakes, optimal timing, technical requirements.",
+  "tips_vi": "Viết lại tips ở trên bằng tiếng Việt tự nhiên.",
   "past_selections": [
     {
       "year": 2023,
@@ -146,7 +146,7 @@ Rules:
     },
     body: JSON.stringify({
       model: SONNET_MODEL,
-      max_tokens: 4000,
+      max_tokens: 8000,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
     }),

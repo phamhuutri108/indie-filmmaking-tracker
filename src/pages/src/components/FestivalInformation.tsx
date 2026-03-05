@@ -53,17 +53,24 @@ function daysUntil(dateStr: string): number {
 }
 
 // ─── Card: 16/9 thumbnail + text below ───────────────────────────────────────
+function buildFaviconSources(domain: string): string[] {
+  return [
+    `https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=256`,
+    `https://icons.duckduckgo.com/ip3/${domain}.ico`,
+    `https://${domain}/favicon.ico`,
+  ];
+}
+
 function FestivalCard({
   festival, lang, onOpen,
 }: {
   festival: Festival; lang: string; onOpen: (id: number, name: string) => void;
 }) {
   const [faviconOk, setFaviconOk] = useState(false);
+  const [srcIdx, setSrcIdx] = useState(0);
   const hue = nameToHue(festival.name);
   const domain = getDomain(festival.website);
-  const faviconUrl = domain
-    ? `https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=256`
-    : null;
+  const sources = domain ? buildFaviconSources(domain) : [];
 
   const initials = festival.name.split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('');
   const deadline = formatDeadline(festival);
@@ -120,12 +127,16 @@ function FestivalCard({
         </span>
 
         {/* Favicon — sized to fill ~85% of container height */}
-        {faviconUrl && (
+        {sources[srcIdx] && (
           <img
-            src={faviconUrl}
+            key={srcIdx}
+            src={sources[srcIdx]}
             alt=""
-            onLoad={() => setFaviconOk(true)}
-            onError={() => setFaviconOk(false)}
+            onLoad={e => {
+              if ((e.currentTarget as HTMLImageElement).naturalWidth > 32) setFaviconOk(true);
+              else if (srcIdx + 1 < sources.length) setSrcIdx(i => i + 1);
+            }}
+            onError={() => { if (srcIdx + 1 < sources.length) setSrcIdx(i => i + 1); }}
             style={{
               position: 'absolute',
               height: '85%', width: '85%',
