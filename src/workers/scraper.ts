@@ -367,6 +367,34 @@ function extractFees(content: string): {
 }
 
 /**
+ * Fetch a festival website and return stripped plain text (max 4000 chars).
+ * Returns empty string on any error or timeout.
+ * Skips known useless URLs (article aggregators, JS-rendered platforms).
+ */
+async function fetchWebsiteText(url: string): Promise<string> {
+  const SKIP = ['asianfilmfestivals.com', 'filmfreeway.com', 'cineuropa.org', 'festhome.com'];
+  if (SKIP.some((h) => url.includes(h))) return '';
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'IFT-Bot/1.0 (Indie Filmmaking Tracker)' },
+      redirect: 'follow',
+    });
+    if (!res.ok) return '';
+    const html = await res.text();
+    const text = stripHtml(html).slice(0, 4000);
+    return text.length > 200 ? text : '';
+  } catch {
+    return '';
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Call Claude Haiku to extract entry fees from text when regex extraction fails.
  * Uses raw fetch (no SDK) — Cloudflare Workers compatible.
  * Returns amounts in cents; currency as ISO 4217.
@@ -429,25 +457,51 @@ async function enrichFeesWithAI(
   entries: Array<{ festival: ParsedFestival; content: string }>,
   apiKey: string
 ): Promise<void> {
-  const missing = entries.filter(
-    (e) => e.festival.fee_early === null && e.festival.fee_regular === null && e.festival.fee_late === null
-  );
-  if (missing.length === 0) return;
+  const noFees = (f: ParsedFestival) =>
+    f.fee_early === null && f.fee_regular === null && f.fee_late === null;
 
+  const applyFees = (festival: ParsedFestival, fees: ReturnType<typeof extractFees>) => {
+    if (fees.fee_early !== null || fees.fee_regular !== null || fees.fee_late !== null) {
+      festival.fee_early   = fees.fee_early;
+      festival.fee_regular = fees.fee_regular;
+      festival.fee_late    = fees.fee_late;
+      festival.entry_currency = fees.currency;
+      return true;
+    }
+    return false;
+  };
+
+  const missing = entries.filter((e) => noFees(e.festival));
+  if (missing.length === 0) return;
   console.log(`[Scraper] AI fee enrichment for ${missing.length} festivals…`);
 
   const CONCURRENCY = 5;
+
+  // Pass 1: AI on RSS content
   for (let i = 0; i < missing.length; i += CONCURRENCY) {
     await Promise.allSettled(
       missing.slice(i, i + CONCURRENCY).map(async ({ festival, content }) => {
-        const text = stripHtml(content);
+        const fees = await extractFeesWithAI(stripHtml(content), festival.name, apiKey);
+        if (applyFees(festival, fees)) {
+          console.log(`[Scraper] AI(RSS) fees for "${festival.name}": ${JSON.stringify(fees)}`);
+        }
+      })
+    );
+  }
+
+  // Pass 2: fetch official website for festivals still missing fees
+  const stillMissing = missing.filter((e) => noFees(e.festival) && e.festival.website);
+  if (stillMissing.length === 0) return;
+  console.log(`[Scraper] Fetching ${stillMissing.length} festival websites for fee data…`);
+
+  for (let i = 0; i < stillMissing.length; i += CONCURRENCY) {
+    await Promise.allSettled(
+      stillMissing.slice(i, i + CONCURRENCY).map(async ({ festival }) => {
+        const text = await fetchWebsiteText(festival.website!);
+        if (!text) return;
         const fees = await extractFeesWithAI(text, festival.name, apiKey);
-        if (fees.fee_early !== null || fees.fee_regular !== null || fees.fee_late !== null) {
-          festival.fee_early   = fees.fee_early;
-          festival.fee_regular = fees.fee_regular;
-          festival.fee_late    = fees.fee_late;
-          festival.entry_currency = fees.currency;
-          console.log(`[Scraper] AI found fees for "${festival.name}": ${JSON.stringify(fees)}`);
+        if (applyFees(festival, fees)) {
+          console.log(`[Scraper] AI(web) fees for "${festival.name}": ${JSON.stringify(fees)}`);
         }
       })
     );
