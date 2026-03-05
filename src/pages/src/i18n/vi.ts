@@ -375,7 +375,7 @@ export const vi = {
     links: 'Liên kết',
     approxRate: 'khoảng',
     noInsights: 'Chưa có dữ liệu hồ sơ.',
-    loadingInsights: 'Đang tạo hồ sơ AI...',
+    loadingInsights: 'Đang tạo hồ sơ... (khoảng 15–30 giây)',
   },
 } as const;
 

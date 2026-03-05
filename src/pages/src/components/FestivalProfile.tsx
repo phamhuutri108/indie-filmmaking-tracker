@@ -226,8 +226,7 @@ function OverviewTab({ festival, insights, insightsLoading, tp, t, lang }: {
     return (
       <div style={{ textAlign: 'center', padding: '40px 0', color: '#718096' }}>
         <div style={{ fontSize: 24, marginBottom: 8 }}>⏳</div>
-        <p>{tp.loadingInsights ?? 'Generating AI profile...'}</p>
-        <p style={{ fontSize: 12 }}>This may take 10–20 seconds on first load.</p>
+        <p>{tp.loadingInsights ?? 'Generating profile... (about 15–30 seconds)'}</p>
       </div>
     );
   }
@@ -444,7 +443,12 @@ function HistoryTab({ festival, insights, insightsLoading, tp, isOwner, onRegene
   onRegenerate: () => void;
 }) {
   if (insightsLoading) {
-    return <div style={{ textAlign: 'center', padding: '40px 0', color: '#718096' }}>⏳ {tp.loadingInsights}</div>;
+    return (
+      <div style={{ textAlign: 'center', padding: '40px 0', color: '#718096' }}>
+        <div style={{ fontSize: 24, marginBottom: 8 }}>⏳</div>
+        <p>{tp.loadingInsights ?? 'Generating profile... (about 15–30 seconds)'}</p>
+      </div>
+    );
   }
 
   const linkTypeIcon: Record<string, string> = {
@@ -639,9 +643,9 @@ export function FestivalProfile({
 
   const subTabs: { key: ProfileSubTab; label: string }[] = [
     { key: 'overview', label: tp.tabOverview ?? 'Overview' },
+    { key: 'history', label: tp.tabHistory ?? 'History' },
     { key: 'sections', label: tp.tabSections ?? 'Sections & Deadlines' },
     ...(isLoggedIn ? [{ key: 'my-status' as ProfileSubTab, label: tp.tabMyStatus ?? 'My Status' }] : []),
-    { key: 'history', label: tp.tabHistory ?? 'History' },
   ];
 
   if (festivalLoading) {

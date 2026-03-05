@@ -375,7 +375,7 @@ export const en = {
     links: 'Links',
     approxRate: 'approx.',
     noInsights: 'No profile data yet.',
-    loadingInsights: 'Generating AI profile...',
+    loadingInsights: 'Generating profile... (about 15–30 seconds)',
   },
 } as const;
 
