@@ -785,9 +785,9 @@ app.post('/api/festival-sections', async (c) => {
   ).bind(
     festival_id, section_name, section_name_vi ?? null, category ?? null,
     early_deadline ?? null, regular_deadline ?? null, late_deadline ?? null,
-    entry_fee_early ? Math.round(Number(entry_fee_early) * 100) : null,
-    entry_fee_regular ? Math.round(Number(entry_fee_regular) * 100) : null,
-    entry_fee_late ? Math.round(Number(entry_fee_late) * 100) : null,
+    entry_fee_early ? Number(entry_fee_early) : null,
+    entry_fee_regular ? Number(entry_fee_regular) : null,
+    entry_fee_late ? Number(entry_fee_late) : null,
     entry_currency ?? 'USD',
     filmfreeway_url ?? null, notification_date ?? null,
     short_film_min_min ? Number(short_film_min_min) : null,
