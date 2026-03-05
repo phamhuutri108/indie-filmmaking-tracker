@@ -693,7 +693,7 @@ function buildAnnouncementEmail(content: string, recipientName: string, appUrl: 
 // Manual triggers
 // ============================================================
 app.get('/api/scrape', async (c) => {
-  const result = await scrapeAsianFilmFestivals(c.env.DB);
+  const result = await scrapeAsianFilmFestivals(c.env.DB, c.env.ANTHROPIC_API_KEY);
   return c.json({ saved: result.saved, skipped: result.skipped, errors: result.errors, ts: new Date().toISOString() });
 });
 

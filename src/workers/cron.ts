@@ -81,7 +81,7 @@ async function runFundScraper(env: Env): Promise<void> {
 
 async function runCineuropa(env: Env): Promise<void> {
   try {
-    const result = await scrapeCineuropaRss(env.DB);
+    const result = await scrapeCineuropaRss(env.DB, env.ANTHROPIC_API_KEY);
     console.log(`[Cron] Cineuropa — saved: ${result.saved}, skipped: ${result.skipped}`);
     if (result.errors.length) console.error('[Cron] Cineuropa errors:', result.errors);
   } catch (err) {
@@ -91,7 +91,7 @@ async function runCineuropa(env: Env): Promise<void> {
 
 async function runScraper(env: Env): Promise<void> {
   try {
-    const result = await scrapeAsianFilmFestivals(env.DB);
+    const result = await scrapeAsianFilmFestivals(env.DB, env.ANTHROPIC_API_KEY);
     console.log(`[Cron] Scraper — saved: ${result.saved}, skipped: ${result.skipped}`);
     if (result.errors.length) {
       console.error('[Cron] Scraper errors:', result.errors);

@@ -366,6 +366,94 @@ function extractFees(content: string): {
   return none;
 }
 
+/**
+ * Call Claude Haiku to extract entry fees from text when regex extraction fails.
+ * Uses raw fetch (no SDK) — Cloudflare Workers compatible.
+ * Returns amounts in cents; currency as ISO 4217.
+ */
+async function extractFeesWithAI(
+  text: string,
+  festivalName: string,
+  apiKey: string
+): Promise<{ fee_early: number | null; fee_regular: number | null; fee_late: number | null; currency: string }> {
+  const none = { fee_early: null, fee_regular: null, fee_late: null, currency: 'USD' };
+  const snippet = text.slice(0, 2500);
+  if (!snippet.trim()) return none;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 120,
+        messages: [{
+          role: 'user',
+          content: `Extract entry submission fees for film festival "${festivalName}" from the text below.
+Return ONLY valid JSON — no explanation:
+{"fee_early":null,"fee_regular":null,"fee_late":null,"currency":"USD"}
+Rules: amounts in cents (integer), ISO 4217 currency, null if not found.
+Text: ${snippet}`,
+        }],
+      }),
+    });
+
+    if (!res.ok) return none;
+    const data = await res.json() as { content?: Array<{ type: string; text: string }> };
+    const raw = data?.content?.[0]?.text?.trim() ?? '';
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return none;
+
+    const p = JSON.parse(jsonMatch[0]);
+    return {
+      fee_early:   typeof p.fee_early   === 'number' ? Math.round(p.fee_early)   : null,
+      fee_regular: typeof p.fee_regular === 'number' ? Math.round(p.fee_regular) : null,
+      fee_late:    typeof p.fee_late    === 'number' ? Math.round(p.fee_late)    : null,
+      currency:    typeof p.currency    === 'string' && p.currency.length >= 3 ? p.currency.toUpperCase() : 'USD',
+    };
+  } catch {
+    return none;
+  }
+}
+
+/**
+ * Post-process parsed festivals: for entries whose regex found no fees,
+ * call Claude AI on the original RSS content to attempt extraction.
+ * Runs up to 5 requests concurrently; failures are silently skipped.
+ */
+async function enrichFeesWithAI(
+  entries: Array<{ festival: ParsedFestival; content: string }>,
+  apiKey: string
+): Promise<void> {
+  const missing = entries.filter(
+    (e) => e.festival.fee_early === null && e.festival.fee_regular === null && e.festival.fee_late === null
+  );
+  if (missing.length === 0) return;
+
+  console.log(`[Scraper] AI fee enrichment for ${missing.length} festivals…`);
+
+  const CONCURRENCY = 5;
+  for (let i = 0; i < missing.length; i += CONCURRENCY) {
+    await Promise.allSettled(
+      missing.slice(i, i + CONCURRENCY).map(async ({ festival, content }) => {
+        const text = stripHtml(content);
+        const fees = await extractFeesWithAI(text, festival.name, apiKey);
+        if (fees.fee_early !== null || fees.fee_regular !== null || fees.fee_late !== null) {
+          festival.fee_early   = fees.fee_early;
+          festival.fee_regular = fees.fee_regular;
+          festival.fee_late    = fees.fee_late;
+          festival.entry_currency = fees.currency;
+          console.log(`[Scraper] AI found fees for "${festival.name}": ${JSON.stringify(fees)}`);
+        }
+      })
+    );
+  }
+}
+
 /** Infer film category from RSS category tags and/or content text. */
 function inferCategory(categories: string[], content: string): string | null {
   const tags = categories.map((c) => c.toLowerCase());
@@ -552,16 +640,21 @@ export async function saveFestivals(
  * Fetch asianfilmfestivals.com RSS, parse call-for-entry items,
  * and persist new festivals to D1. Called daily at 08:00 UTC.
  */
-export async function scrapeAsianFilmFestivals(db: D1Database): Promise<ScrapeResult> {
+export async function scrapeAsianFilmFestivals(db: D1Database, apiKey?: string): Promise<ScrapeResult> {
   const items = await fetchRssFeed(ASIAN_FILM_FESTIVALS_FEED);
   console.log(`[Scraper] Fetched ${items.length} RSS items from asianfilmfestivals.com`);
 
-  const festivals: ParsedFestival[] = [];
+  const entries: Array<{ festival: ParsedFestival; content: string }> = [];
   for (const item of items) {
     const parsed = parseFestivalItem(item);
-    if (parsed) festivals.push(parsed);
+    if (parsed) entries.push({ festival: parsed, content: item.content });
   }
-  console.log(`[Scraper] Parsed ${festivals.length} call-for-entry items`);
+  console.log(`[Scraper] Parsed ${entries.length} call-for-entry items`);
+
+  // AI fee enrichment for festivals where regex found nothing
+  if (apiKey) await enrichFeesWithAI(entries, apiKey);
+
+  const festivals = entries.map((e) => e.festival);
 
   // Cache raw items so already-processed ones are skipped on future runs
   for (const item of items) {
@@ -644,16 +737,20 @@ export function parseCineuropaItem(item: RssItem): ParsedFestival | null {
  * Fetch Cineuropa RSS, parse call-for-entry items,
  * and persist new European festivals to D1.
  */
-export async function scrapeCineuropaRss(db: D1Database): Promise<ScrapeResult> {
+export async function scrapeCineuropaRss(db: D1Database, apiKey?: string): Promise<ScrapeResult> {
   const items = await fetchRssFeed(CINEUROPA_RSS_FEED);
   console.log(`[Scraper] Fetched ${items.length} RSS items from cineuropa.org`);
 
-  const festivals: ParsedFestival[] = [];
+  const entries: Array<{ festival: ParsedFestival; content: string }> = [];
   for (const item of items) {
     const parsed = parseCineuropaItem(item);
-    if (parsed) festivals.push(parsed);
+    if (parsed) entries.push({ festival: parsed, content: item.content });
   }
-  console.log(`[Scraper] Parsed ${festivals.length} call-for-entry items from Cineuropa`);
+  console.log(`[Scraper] Parsed ${entries.length} call-for-entry items from Cineuropa`);
+
+  if (apiKey) await enrichFeesWithAI(entries, apiKey);
+
+  const festivals = entries.map((e) => e.festival);
 
   for (const item of items) {
     try {
