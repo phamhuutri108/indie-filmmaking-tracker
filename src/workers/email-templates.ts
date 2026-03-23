@@ -83,6 +83,68 @@ export function buildDigestEmail(items: DigestItem[], recipientName?: string): s
   `;
 }
 
+export type DeadlineCheckItem = {
+  name: string;
+  refTable: string;
+  refId: number;
+  found: boolean;
+  deadline?: string;
+  website?: string;
+};
+
+export function buildDeadlineCheckEmail(
+  updated: DeadlineCheckItem[],
+  pending: DeadlineCheckItem[],
+  ts: string
+): string {
+  const updatedRows = updated
+    .map((i) => `
+      <tr>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;font-weight:600;">${i.name}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;color:#276749;">${i.deadline}</td>
+        <td style="padding:8px;border-bottom:1px solid #e2e8f0;font-size:12px;">${i.website ? `<a href="${i.website}" style="color:#004aad;">${i.website}</a>` : '—'}</td>
+      </tr>`)
+    .join('');
+
+  const pendingRows = pending
+    .map((i) => `<li>${i.name}</li>`)
+    .join('');
+
+  const updatedSection = updated.length > 0 ? `
+    <h3 style="color:#276749;">✅ ĐÃ TÌM THẤY DEADLINE (${updated.length}):</h3>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="background:#2d3748;color:white;">
+          <th style="padding:8px;text-align:left;">Festival</th>
+          <th style="padding:8px;text-align:left;">Deadline</th>
+          <th style="padding:8px;text-align:left;">Website</th>
+        </tr>
+      </thead>
+      <tbody>${updatedRows}</tbody>
+    </table>` : '';
+
+  const pendingSection = pending.length > 0 ? `
+    <h3 style="color:#c05621;">⏳ CHƯA TÌM THẤY DEADLINE (${pending.length}):</h3>
+    <ul style="margin:0;padding-left:20px;">${pendingRows}</ul>
+    <p style="color:#718096;font-size:13px;">→ Sẽ kiểm tra lại sau 2 tuần</p>` : '';
+
+  return `
+    <div style="font-family:sans-serif;max-width:680px;margin:0 auto;padding:20px;">
+      <h2>🎬 BÁO CÁO KIỂM TRA DEADLINE FESTIVAL</h2>
+      <p style="color:#718096;">📅 Thời gian: ${ts}</p>
+      <hr/>
+      ${updatedSection}
+      ${pendingSection}
+      <hr/>
+      <p style="color:#718096;font-size:12px;">
+        💡 Để check thủ công: Nhấn Claude "Check deadline update festival"<br/>
+        ⚙️ Script chạy tự động mỗi 2 tuần (thứ 2, 9h sáng)
+      </p>
+      ${FOOTER}
+    </div>
+  `;
+}
+
 export function buildErrorAlertEmail(failed: Array<{ task: string; reason: unknown }>): string {
   const rows = failed
     .map(f => `<li><strong>${f.task}</strong>: ${String(f.reason)}</li>`)

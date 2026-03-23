@@ -1,10 +1,10 @@
 // IFT Cron Job — Daily at 08:00 UTC
 // Runs via Cloudflare Cron Trigger
 
-import { scrapeAsianFilmFestivals, scrapeCineuropaRss } from './scraper';
+import { scrapeAsianFilmFestivals, scrapeCineuropaRss, searchFestivalDeadlineWithAI } from './scraper';
 import { scrapeFunds } from './fund-scraper';
 import { batchAnalyzeFestivals, batchAnalyzeFunds, batchAnalyzeEducation } from './ai-scraper';
-import { buildBundledAlertEmail, buildDigestEmail, buildErrorAlertEmail, type AlertItem, type DigestItem } from './email-templates';
+import { buildBundledAlertEmail, buildDigestEmail, buildErrorAlertEmail, buildDeadlineCheckEmail, type AlertItem, type DigestItem, type DeadlineCheckItem } from './email-templates';
 
 export interface Env {
   DB: D1Database;
@@ -17,6 +17,12 @@ export interface Env {
 export async function handleCron(env: Env): Promise<void> {
   console.log('[IFT Cron] Starting daily run:', new Date().toISOString());
 
+  // Biweekly deadline check — runs on Mondays of even ISO weeks
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const weekNum = Math.ceil((((now.getTime() - new Date(now.getFullYear(), 0, 1).getTime()) / 86400000) + new Date(now.getFullYear(), 0, 1).getDay() + 1) / 7);
+  const isBiweeklyMonday = dayOfWeek === 1 && weekNum % 2 === 0;
+
   const tasks: Array<[string, Promise<void>]> = [
     ['AsianFilmFestivals scraper', runScraper(env)],
     ['Cineuropa scraper', runCineuropa(env)],
@@ -24,6 +30,7 @@ export async function handleCron(env: Env): Promise<void> {
     ['AI credibility analysis', runAIAnalysis(env)],
     ['Monitor alerts', checkMonitorCommands(env)],
     ['Daily digest', sendDailyDigest(env)],
+    ...(isBiweeklyMonday ? [['Pending deadline check', checkPendingDeadlines(env).then(() => {})] as [string, Promise<void>]] : []),
   ];
 
   const results = await Promise.allSettled(tasks.map(([, p]) => p));
@@ -244,6 +251,84 @@ async function sendDailyDigest(env: Env): Promise<void> {
 
     console.log(`[Cron] Member digest sent to ${member.email} (${watchlistItems.results.length} items)`);
   }
+}
+
+export async function checkPendingDeadlines(env: Env): Promise<{ updated: number; pending: number }> {
+  if (!env.ANTHROPIC_API_KEY) {
+    console.warn('[Cron] No ANTHROPIC_API_KEY, skipping pending deadline check.');
+    return { updated: 0, pending: 0 };
+  }
+
+  // Find all active monitors where the referenced item has no deadline yet
+  const rows = await env.DB.prepare(`
+    SELECT
+      mc.id as monitor_id, mc.ref_table, mc.ref_id, mc.target_url,
+      CASE mc.ref_table
+        WHEN 'festivals' THEN f.name
+        WHEN 'funds_grants' THEN fg.name
+        WHEN 'education_residency' THEN er.name
+      END as name,
+      CASE mc.ref_table
+        WHEN 'festivals' THEN f.country
+        ELSE NULL
+      END as country,
+      CASE mc.ref_table
+        WHEN 'festivals' THEN f.website
+        WHEN 'funds_grants' THEN fg.website
+        WHEN 'education_residency' THEN er.website
+      END as website
+    FROM monitor_commands mc
+    LEFT JOIN festivals f          ON mc.ref_table = 'festivals'          AND mc.ref_id = f.id
+    LEFT JOIN funds_grants fg      ON mc.ref_table = 'funds_grants'       AND mc.ref_id = fg.id
+    LEFT JOIN education_residency er ON mc.ref_table = 'education_residency' AND mc.ref_id = er.id
+    WHERE mc.is_active = 1
+      AND (
+        (mc.ref_table = 'festivals'           AND (f.regular_deadline IS NULL OR f.regular_deadline < date('now')))
+        OR (mc.ref_table = 'funds_grants'      AND (fg.deadline IS NULL OR fg.deadline < date('now')))
+        OR (mc.ref_table = 'education_residency' AND (er.deadline IS NULL OR er.deadline < date('now')))
+      )
+  `).all<{ monitor_id: number; ref_table: string; ref_id: number; target_url: string | null; name: string; country: string | null; website: string | null }>();
+
+  const monitors = rows.results.filter(r => r.name);
+  const updatedItems: DeadlineCheckItem[] = [];
+  const pendingItems: DeadlineCheckItem[] = [];
+
+  // Process in batches of 3 to avoid rate limits
+  for (let i = 0; i < monitors.length; i += 3) {
+    const batch = monitors.slice(i, i + 3);
+    await Promise.allSettled(batch.map(async (m) => {
+      try {
+        const deadline = await searchFestivalDeadlineWithAI(m.name, m.country, env.ANTHROPIC_API_KEY);
+        if (deadline) {
+          // Update the deadline in the appropriate table
+          if (m.ref_table === 'festivals') {
+            await env.DB.prepare(`UPDATE festivals SET regular_deadline = ? WHERE id = ?`).bind(deadline, m.ref_id).run();
+          } else if (m.ref_table === 'funds_grants') {
+            await env.DB.prepare(`UPDATE funds_grants SET deadline = ? WHERE id = ?`).bind(deadline, m.ref_id).run();
+          } else if (m.ref_table === 'education_residency') {
+            await env.DB.prepare(`UPDATE education_residency SET deadline = ? WHERE id = ?`).bind(deadline, m.ref_id).run();
+          }
+          updatedItems.push({ name: m.name, refTable: m.ref_table, refId: m.ref_id, found: true, deadline, website: m.website ?? undefined });
+          console.log(`[Cron] Deadline found for "${m.name}": ${deadline}`);
+        } else {
+          pendingItems.push({ name: m.name, refTable: m.ref_table, refId: m.ref_id, found: false, website: m.website ?? undefined });
+        }
+      } catch (e) {
+        console.error(`[Cron] Deadline search failed for "${m.name}":`, e);
+        pendingItems.push({ name: m.name, refTable: m.ref_table, refId: m.ref_id, found: false });
+      }
+    }));
+  }
+
+  const ts = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false });
+  await sendEmail(env, {
+    to: env.ALERT_EMAIL,
+    subject: `🎬 Festival Deadline Check — ${updatedItems.length} updated, ${pendingItems.length} pending`,
+    html: buildDeadlineCheckEmail(updatedItems, pendingItems, ts),
+  });
+
+  console.log(`[Cron] Deadline check done — updated: ${updatedItems.length}, pending: ${pendingItems.length}`);
+  return { updated: updatedItems.length, pending: pendingItems.length };
 }
 
 async function sendEmail(

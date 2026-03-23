@@ -4,7 +4,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { getAssetFromKV, NotFoundError } from '@cloudflare/kv-asset-handler';
-import { handleCron } from './cron';
+import { handleCron, checkPendingDeadlines } from './cron';
 import { scrapeAsianFilmFestivals, searchFestivalFeeWithAI } from './scraper';
 import { scrapeFunds } from './fund-scraper';
 import { generateICS, dbRowsToEvents } from './calendar';
@@ -695,6 +695,18 @@ function buildAnnouncementEmail(content: string, recipientName: string, appUrl: 
 app.get('/api/scrape', async (c) => {
   const result = await scrapeAsianFilmFestivals(c.env.DB, c.env.ANTHROPIC_API_KEY);
   return c.json({ saved: result.saved, skipped: result.skipped, errors: result.errors, ts: new Date().toISOString() });
+});
+
+// Manual trigger: check if monitored festivals with no deadline now have one
+app.get('/api/festivals/check-deadlines', async (c) => {
+  const result = await checkPendingDeadlines({
+    DB: c.env.DB,
+    RESEND_API_KEY: c.env.RESEND_API_KEY,
+    ALERT_EMAIL: c.env.ALERT_EMAIL,
+    APP_URL: c.env.APP_URL,
+    ANTHROPIC_API_KEY: c.env.ANTHROPIC_API_KEY,
+  });
+  return c.json({ ...result, ts: new Date().toISOString() });
 });
 
 // Background fee enrichment for existing festivals with no fees

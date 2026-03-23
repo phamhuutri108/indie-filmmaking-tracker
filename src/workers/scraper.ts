@@ -531,6 +531,80 @@ Rules: amounts in dollars as a number (e.g. $25→25, €10→10), ISO 4217 curr
 }
 
 /**
+ * Use Claude + web_search to find a festival's submission deadline.
+ * Returns ISO date string (YYYY-MM-DD) or null if not found.
+ */
+export async function searchFestivalDeadlineWithAI(
+  festivalName: string,
+  country: string | null,
+  apiKey: string
+): Promise<string | null> {
+  type Msg = { role: 'user' | 'assistant'; content: unknown };
+  const year = new Date().getFullYear();
+
+  const messages: Msg[] = [{
+    role: 'user',
+    content: `Search for the ${year} or ${year + 1} film submission deadline for "${festivalName}" film festival${country ? ` (${country})` : ''}. Return ONLY this JSON, no explanation:
+{"deadline":null,"deadline_early":null}
+Rules: use ISO format YYYY-MM-DD, null if not found. "deadline" = regular deadline, "deadline_early" = early bird if available.`,
+  }];
+
+  for (let i = 0; i < 3; i++) {
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 200,
+          tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+          messages,
+        }),
+      });
+      if (res.status === 429) {
+        const retryAfter = parseInt(res.headers.get('retry-after') ?? '30', 10);
+        await new Promise((r) => setTimeout(r, retryAfter * 1000));
+        continue;
+      }
+      if (!res.ok) return null;
+
+      const data = await res.json() as {
+        stop_reason: string;
+        content: Array<{ type: string; text?: string }>;
+      };
+
+      if (data.stop_reason === 'end_turn') {
+        const text = (data.content ?? [])
+          .filter((b) => b.type === 'text')
+          .map((b) => (b as { text: string }).text)
+          .join('\n');
+        const jsonMatch = text.match(/\{[\s\S]*?\}/);
+        if (!jsonMatch) return null;
+        const p = JSON.parse(jsonMatch[0]);
+        // Prefer early deadline, fall back to regular
+        const date = p.deadline_early || p.deadline;
+        if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+        return null;
+      }
+
+      if (data.stop_reason === 'pause_turn') {
+        messages.push({ role: 'assistant', content: data.content });
+        continue;
+      }
+
+      break;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
  * Post-process parsed festivals: for entries whose regex found no fees,
  * call Claude AI on the original RSS content to attempt extraction.
  * Runs up to 5 requests concurrently; failures are silently skipped.
