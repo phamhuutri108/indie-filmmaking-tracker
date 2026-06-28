@@ -5,11 +5,12 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { getAssetFromKV, NotFoundError } from '@cloudflare/kv-asset-handler';
 import { handleCron, checkPendingDeadlines } from './cron';
-import { scrapeAsianFilmFestivals, searchFestivalFeeWithAI } from './scraper';
+import { scrapeAsianFilmFestivals, searchFestivalFeeWithAI, saveFestivals, type ParsedFestival } from './scraper';
 import { scrapeFunds } from './fund-scraper';
 import { generateICS, dbRowsToEvents } from './calendar';
 import { signJWT, verifyJWT, getUserFromRequest } from './auth';
 import { generateFestivalInsights, generateViTranslation } from './festival-insights';
+import { verifyPublicUrl, type DeadlineCandidate } from './data-quality';
 
 // Injected by wrangler at build time when [site] is configured
 // @ts-ignore
@@ -27,6 +28,8 @@ export interface Env {
   JWT_SECRET: string;
   OWNER_PASSWORD: string;
   ANTHROPIC_API_KEY: string;
+  AI: Ai;
+  AI_AUTO_PUBLISH?: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();
@@ -435,6 +438,405 @@ app.get('/api/admin/users/:id/watchlist', async (c) => {
 });
 
 // ============================================================
+// Admin: data quality review
+// ============================================================
+
+app.get('/api/admin/data-reviews', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user || user.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
+
+  const status = c.req.query('status') ?? 'pending';
+  const allowed = new Set(['pending', 'approved', 'rejected']);
+  if (!allowed.has(status)) return c.json({ error: 'Invalid status' }, 400);
+
+  const result = await c.env.DB.prepare(`
+    SELECT id, review_type, entity_type, entity_id, source_url, source_title,
+           candidate_json, ai_model, ai_confidence, reason, status,
+           created_at, reviewed_at
+    FROM data_review_queue
+    WHERE status = ?
+    ORDER BY created_at DESC
+    LIMIT 200
+  `).bind(status).all();
+  return c.json({ data: result.results });
+});
+
+app.post('/api/admin/data-reviews/:id/approve', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user || user.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
+
+  const reviewId = Number(c.req.param('id'));
+  const review = await c.env.DB.prepare(`
+    SELECT * FROM data_review_queue WHERE id = ? AND status = 'pending'
+  `).bind(reviewId).first<{
+    id: number;
+    review_type: string;
+    entity_type: string;
+    entity_id: number | null;
+    source_url: string | null;
+    candidate_json: string;
+  }>();
+  if (!review) return c.json({ error: 'Pending review not found' }, 404);
+
+  let payload: any;
+  try {
+    payload = JSON.parse(review.candidate_json);
+  } catch {
+    return c.json({ error: 'Invalid candidate data' }, 400);
+  }
+  const requestBody = await c.req.json<{ corrections?: Record<string, unknown> }>().catch(() => ({}));
+  const corrections = requestBody.corrections ?? {};
+  for (const key of ['early_deadline', 'regular_deadline', 'deadline_early', 'deadline_regular']) {
+    const value = corrections[key];
+    if (value !== undefined && value !== null && value !== ''
+      && (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value))) {
+      return c.json({ error: `Invalid date: ${key}` }, 400);
+    }
+  }
+  for (const key of ['website', 'filmfreeway_url', 'source_url']) {
+    const value = corrections[key];
+    if (value === undefined || value === null || value === '') continue;
+    try {
+      const url = new URL(String(value));
+      if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Invalid protocol');
+    } catch {
+      return c.json({ error: `Invalid URL: ${key}` }, 400);
+    }
+  }
+  const correctionDate = (key: string, fallback: string | null): string | null => {
+    if (!(key in corrections)) return fallback;
+    const value = corrections[key];
+    if (value === '' || value === null) return null;
+    return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : fallback;
+  };
+  const correctionUrl = (key: string, fallback: string | null): string | null => {
+    if (!(key in corrections)) return fallback;
+    const value = corrections[key];
+    if (value === '' || value === null) return null;
+    if (typeof value !== 'string') return fallback;
+    try {
+      const url = new URL(value);
+      return ['http:', 'https:'].includes(url.protocol) ? url.toString() : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
+  if (review.review_type === 'new_festival') {
+    const original = payload?.festival as ParsedFestival | undefined;
+    const festival = original ? {
+      ...original,
+      name: typeof corrections.name === 'string' && corrections.name.trim() ? corrections.name.trim() : original.name,
+      early_deadline: correctionDate('early_deadline', original.early_deadline),
+      regular_deadline: correctionDate('regular_deadline', original.regular_deadline),
+      website: correctionUrl('website', original.website),
+      filmfreeway_url: correctionUrl('filmfreeway_url', original.filmfreeway_url),
+    } : undefined;
+    if (!festival?.name) return c.json({ error: 'Festival data is incomplete' }, 400);
+    const saveResult = await saveFestivals(c.env.DB, [festival]);
+    if (saveResult.errors.length > 0) {
+      return c.json({ error: saveResult.errors.join('; ') }, 400);
+    }
+    const saved = await c.env.DB.prepare(`
+      SELECT id FROM festivals
+      WHERE name = ? AND (regular_deadline = ? OR (regular_deadline IS NULL AND ? IS NULL))
+      ORDER BY id DESC LIMIT 1
+    `).bind(festival.name, festival.regular_deadline, festival.regular_deadline).first<{ id: number }>();
+    if (saved) {
+      await c.env.DB.prepare(`
+        INSERT INTO data_verifications
+          (entity_type, entity_id, field_name, field_value, status, source_url,
+           evidence, access_method, checked_by)
+        VALUES ('festival', ?, 'overall', ?, 'verified', ?, ?, 'manual-review', ?)
+        ON CONFLICT(entity_type, entity_id, field_name) DO UPDATE SET
+          field_value = excluded.field_value,
+          status = 'verified', source_url = excluded.source_url,
+          evidence = excluded.evidence, access_method = excluded.access_method,
+          checked_at = CURRENT_TIMESTAMP, checked_by = excluded.checked_by
+      `).bind(
+        saved.id,
+        festival.name,
+        review.source_url,
+        payload?.analysis?.evidence ?? null,
+        user.sub,
+      ).run();
+    }
+  } else if (review.review_type === 'deadline_update') {
+    if (!review.entity_id) return c.json({ error: 'Missing entity id' }, 400);
+    const candidate = payload as DeadlineCandidate;
+    const early = correctionDate('deadline_early', candidate.deadline_early ?? null);
+    const regular = correctionDate('deadline_regular', candidate.deadline_regular ?? null);
+    candidate.deadline_early = early;
+    candidate.deadline_regular = regular;
+    candidate.source_url = correctionUrl('source_url', candidate.source_url);
+    if (typeof corrections.evidence === 'string') candidate.evidence = corrections.evidence.slice(0, 800);
+    if (!early && !regular) return c.json({ error: 'No deadline to approve' }, 400);
+
+    if (review.entity_type === 'festivals') {
+      await c.env.DB.prepare(`
+        UPDATE festivals SET
+          early_deadline = COALESCE(?, early_deadline),
+          regular_deadline = COALESCE(?, regular_deadline),
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).bind(early, regular, review.entity_id).run();
+    } else if (review.entity_type === 'funds_grants') {
+      await c.env.DB.prepare(`
+        UPDATE funds_grants SET deadline = COALESCE(?, deadline), updated_at = CURRENT_TIMESTAMP WHERE id = ?
+      `).bind(regular ?? early, review.entity_id).run();
+    } else if (review.entity_type === 'education_residency') {
+      await c.env.DB.prepare(`
+        UPDATE education_residency SET deadline = COALESCE(?, deadline), updated_at = CURRENT_TIMESTAMP WHERE id = ?
+      `).bind(regular ?? early, review.entity_id).run();
+    } else {
+      return c.json({ error: 'Unsupported entity type' }, 400);
+    }
+
+    const verifiedValue = regular ?? early;
+    await c.env.DB.prepare(`
+      INSERT INTO data_verifications
+        (entity_type, entity_id, field_name, field_value, status, source_url,
+         evidence, access_method, checked_by)
+      VALUES (?, ?, 'deadline', ?, 'verified', ?, ?, 'manual-review', ?)
+      ON CONFLICT(entity_type, entity_id, field_name) DO UPDATE SET
+        field_value = excluded.field_value, status = 'verified',
+        source_url = excluded.source_url, evidence = excluded.evidence,
+        access_method = excluded.access_method, checked_at = CURRENT_TIMESTAMP,
+        checked_by = excluded.checked_by
+    `).bind(
+      review.entity_type,
+      review.entity_id,
+      verifiedValue,
+      candidate.source_url ?? review.source_url,
+      candidate.evidence,
+      user.sub,
+    ).run();
+  } else if (review.review_type === 'existing_festival_audit') {
+    if (!review.entity_id) return c.json({ error: 'Missing festival id' }, 400);
+    const currentFestival = payload?.festival ?? {};
+    const correctedName = typeof corrections.name === 'string' && corrections.name.trim()
+      ? corrections.name.trim() : currentFestival.name;
+    const correctedWebsite = correctionUrl('website', currentFestival.website ?? null);
+    const correctedSubmission = correctionUrl('filmfreeway_url', currentFestival.filmfreeway_url ?? null);
+    const correctedEarly = correctionDate('early_deadline', currentFestival.early_deadline ?? null);
+    const correctedRegular = correctionDate('regular_deadline', currentFestival.regular_deadline ?? null);
+    await c.env.DB.prepare(`
+      UPDATE festivals SET name = ?, website = ?, filmfreeway_url = ?,
+        early_deadline = ?, regular_deadline = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).bind(
+      correctedName,
+      correctedWebsite,
+      correctedSubmission,
+      correctedEarly,
+      correctedRegular,
+      review.entity_id,
+    ).run();
+    await c.env.DB.prepare(`
+      INSERT INTO data_verifications
+        (entity_type, entity_id, field_name, field_value, status, source_url,
+         evidence, access_method, checked_by)
+      VALUES ('festival', ?, 'audit', ?, 'verified', ?, ?, 'manual-review', ?)
+      ON CONFLICT(entity_type, entity_id, field_name) DO UPDATE SET
+        field_value = excluded.field_value, status = 'verified',
+        source_url = excluded.source_url, evidence = excluded.evidence,
+        access_method = excluded.access_method, checked_at = CURRENT_TIMESTAMP,
+        checked_by = excluded.checked_by
+    `).bind(
+      review.entity_id,
+      correctedName ?? null,
+      correctedWebsite ?? review.source_url,
+      'Owner reviewed and optionally corrected automated URL audit.',
+      user.sub,
+    ).run();
+  } else {
+    return c.json({ error: 'Unsupported review type' }, 400);
+  }
+
+  await c.env.DB.prepare(`
+    UPDATE data_review_queue
+    SET status = 'approved', reviewed_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP, reviewer_id = ?
+    WHERE id = ?
+  `).bind(user.sub, reviewId).run();
+  return c.json({ ok: true });
+});
+
+app.post('/api/admin/data-reviews/:id/reject', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user || user.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
+  const review = await c.env.DB.prepare(`
+    SELECT review_type, entity_id FROM data_review_queue WHERE id = ? AND status = 'pending'
+  `).bind(c.req.param('id')).first<{ review_type: string; entity_id: number | null }>();
+  if (!review) return c.json({ error: 'Pending review not found' }, 404);
+  if (review.review_type === 'existing_festival_audit' && review.entity_id) {
+    await c.env.DB.prepare(`
+      UPDATE festivals SET status = 'review', updated_at = CURRENT_TIMESTAMP WHERE id = ?
+    `).bind(review.entity_id).run();
+  }
+  await c.env.DB.prepare(`
+    UPDATE data_review_queue
+    SET status = 'rejected', reviewed_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP, reviewer_id = ?
+    WHERE id = ? AND status = 'pending'
+  `).bind(user.sub, c.req.param('id')).run();
+  return c.json({ ok: true });
+});
+
+app.post('/api/admin/data-reviews/audit-existing', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user || user.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
+
+  const body = await c.req.json<{ limit?: number }>().catch(() => ({}));
+  const limit = Math.min(25, Math.max(1, Number(body.limit) || 10));
+  const result = await c.env.DB.prepare(`
+    SELECT f.id, f.name, f.website, f.filmfreeway_url, f.early_deadline, f.regular_deadline
+    FROM festivals f
+    WHERE f.status = 'active'
+      AND NOT EXISTS (
+        SELECT 1 FROM data_verifications v
+        WHERE v.entity_type = 'festival' AND v.entity_id = f.id
+          AND v.field_name = 'audit'
+      )
+    ORDER BY
+      CASE WHEN f.regular_deadline >= date('now') THEN 0 ELSE 1 END,
+      f.regular_deadline ASC,
+      f.id ASC
+    LIMIT ?
+  `).bind(limit).all<{
+    id: number;
+    name: string;
+    website: string | null;
+    filmfreeway_url: string | null;
+    early_deadline: string | null;
+    regular_deadline: string | null;
+  }>();
+
+  let verified = 0;
+  let queued = 0;
+  for (const festival of result.results) {
+    const links = [
+      ['website', festival.website],
+      ['filmfreeway_url', festival.filmfreeway_url],
+    ] as const;
+    const checks: Record<string, unknown> = {};
+    let needsReview = /must-see|opening film|\bfund\b|&#\d+;|&[a-z]+;/i.test(festival.name);
+    const reasons: string[] = needsReview ? ['Festival name looks like an article, fund, or contains broken HTML.'] : [];
+    let deadlineMatched = false;
+    let deadlineSource: string | null = null;
+    if (festival.website && /asianfilmfestivals\.com|cineuropa\.org/i.test(festival.website)) {
+      needsReview = true;
+      reasons.push('Website points to an aggregator article instead of an official festival page.');
+    }
+
+    for (const [field, url] of links) {
+      if (!url) continue;
+      const check = await verifyPublicUrl(url, {
+        festivalName: festival.name,
+        dates: [festival.early_deadline, festival.regular_deadline],
+      });
+      checks[field] = check;
+      if (check.deadlineMatched) {
+        deadlineMatched = true;
+        deadlineSource = check.finalUrl ?? url;
+      }
+      if (!check.reachable || check.status !== 'verified') {
+        needsReview = true;
+        reasons.push(`${field}: ${check.reason}`);
+      }
+      await c.env.DB.prepare(`
+        INSERT INTO data_verifications
+          (entity_type, entity_id, field_name, field_value, status, source_url,
+           access_method, http_status, final_url, metadata)
+        VALUES ('festival', ?, ?, ?, ?, ?, 'direct-fetch', ?, ?, ?)
+        ON CONFLICT(entity_type, entity_id, field_name) DO UPDATE SET
+          field_value = excluded.field_value, status = excluded.status,
+          source_url = excluded.source_url, access_method = excluded.access_method,
+          http_status = excluded.http_status, final_url = excluded.final_url,
+          checked_at = CURRENT_TIMESTAMP, metadata = excluded.metadata
+      `).bind(
+        festival.id,
+        field,
+        url,
+        check.status,
+        url,
+        check.httpStatus,
+        check.finalUrl,
+        JSON.stringify(check),
+      ).run();
+    }
+
+    if (festival.early_deadline || festival.regular_deadline) {
+      if (deadlineMatched) {
+        await c.env.DB.prepare(`
+          INSERT INTO data_verifications
+            (entity_type, entity_id, field_name, field_value, status, source_url,
+             evidence, access_method, checked_by)
+          VALUES ('festival', ?, 'deadline', ?, 'verified', ?, ?, 'direct-fetch', ?)
+          ON CONFLICT(entity_type, entity_id, field_name) DO UPDATE SET
+            field_value = excluded.field_value, status = 'verified',
+            source_url = excluded.source_url, evidence = excluded.evidence,
+            access_method = excluded.access_method, checked_at = CURRENT_TIMESTAMP,
+            checked_by = excluded.checked_by
+        `).bind(
+          festival.id,
+          JSON.stringify({ early: festival.early_deadline, regular: festival.regular_deadline }),
+          deadlineSource,
+          'Stored deadline found verbatim on the fetched source page.',
+          user.sub,
+        ).run();
+      } else {
+        needsReview = true;
+        reasons.push('Stored deadline could not be corroborated on the available source pages.');
+      }
+    }
+
+    if (needsReview) {
+      const sourceGuid = `audit:${festival.id}:${festival.website ?? ''}:${festival.filmfreeway_url ?? ''}`;
+      await c.env.DB.prepare(`
+        INSERT INTO data_review_queue
+          (review_type, entity_type, entity_id, source_url, source_guid, source_title,
+           candidate_json, reason, status)
+        VALUES ('existing_festival_audit', 'festival', ?, ?, ?, ?, ?, ?, 'pending')
+        ON CONFLICT(review_type, source_guid) DO UPDATE SET
+          candidate_json = excluded.candidate_json, reason = excluded.reason,
+          updated_at = CURRENT_TIMESTAMP
+      `).bind(
+        festival.id,
+        festival.website,
+        sourceGuid,
+        festival.name,
+        JSON.stringify({ festival, checks }),
+        reasons.join(' '),
+      ).run();
+      await c.env.DB.prepare(`
+        INSERT INTO data_verifications
+          (entity_type, entity_id, field_name, field_value, status, access_method, checked_by, metadata)
+        VALUES ('festival', ?, 'audit', ?, 'review', 'automated-link-check', ?, ?)
+        ON CONFLICT(entity_type, entity_id, field_name) DO UPDATE SET
+          field_value = excluded.field_value, status = 'review',
+          access_method = excluded.access_method, checked_at = CURRENT_TIMESTAMP,
+          checked_by = excluded.checked_by, metadata = excluded.metadata
+      `).bind(festival.id, festival.name, user.sub, JSON.stringify({ checks, reasons })).run();
+      queued++;
+    } else {
+      await c.env.DB.prepare(`
+        INSERT INTO data_verifications
+          (entity_type, entity_id, field_name, field_value, status, access_method, checked_by)
+        VALUES ('festival', ?, 'audit', ?, 'verified', 'automated-link-check', ?)
+        ON CONFLICT(entity_type, entity_id, field_name) DO UPDATE SET
+          field_value = excluded.field_value, status = 'verified',
+          access_method = excluded.access_method, checked_at = CURRENT_TIMESTAMP,
+          checked_by = excluded.checked_by
+      `).bind(festival.id, festival.name, user.sub).run();
+      verified++;
+    }
+  }
+
+  return c.json({ checked: result.results.length, verified, queued });
+});
+
+// ============================================================
 // Feedback
 // ============================================================
 app.post('/api/feedback', async (c) => {
@@ -693,24 +1095,37 @@ function buildAnnouncementEmail(content: string, recipientName: string, appUrl: 
 // Manual triggers
 // ============================================================
 app.get('/api/scrape', async (c) => {
-  const result = await scrapeAsianFilmFestivals(c.env.DB, c.env.ANTHROPIC_API_KEY);
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user || user.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
+  const result = await scrapeAsianFilmFestivals(
+    c.env.DB,
+    c.env.ANTHROPIC_API_KEY,
+    c.env.AI,
+    c.env.AI_AUTO_PUBLISH === 'true',
+  );
   return c.json({ saved: result.saved, skipped: result.skipped, errors: result.errors, ts: new Date().toISOString() });
 });
 
 // Manual trigger: check if monitored festivals with no deadline now have one
 app.get('/api/festivals/check-deadlines', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user || user.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
   const result = await checkPendingDeadlines({
     DB: c.env.DB,
     RESEND_API_KEY: c.env.RESEND_API_KEY,
     ALERT_EMAIL: c.env.ALERT_EMAIL,
     APP_URL: c.env.APP_URL,
     ANTHROPIC_API_KEY: c.env.ANTHROPIC_API_KEY,
+    AI: c.env.AI,
+    AI_AUTO_PUBLISH: c.env.AI_AUTO_PUBLISH,
   });
   return c.json({ ...result, ts: new Date().toISOString() });
 });
 
 // Background fee enrichment for existing festivals with no fees
 app.get('/api/enrich-fees', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user || user.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
   const db = c.env.DB;
   const apiKey = c.env.ANTHROPIC_API_KEY;
 
@@ -749,11 +1164,15 @@ app.get('/api/enrich-fees', async (c) => {
 });
 
 app.get('/api/funds/scrape', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user || user.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
   const result = await scrapeFunds(c.env.DB);
   return c.json({ saved: result.saved, skipped: result.skipped, errors: result.errors, ts: new Date().toISOString() });
 });
 
 app.get('/api/cron/run', async (c) => {
+  const user = await getUserFromRequest(c.req.raw, c.env.JWT_SECRET);
+  if (!user || user.role !== 'owner') return c.json({ error: 'Unauthorized' }, 401);
   await handleCron(c.env);
   return c.json({ ok: true, ts: new Date().toISOString() });
 });
@@ -764,7 +1183,18 @@ app.get('/api/cron/run', async (c) => {
 app.get('/api/festivals', async (c) => {
   const { category, tier, prestige_tier, status = 'active', limit = '500', offset = '0', search } = c.req.query();
 
-  let query = `SELECT * FROM festivals WHERE status = ?`;
+  let query = `SELECT f.*,
+    COALESCE((
+      SELECT v.status FROM data_verifications v
+      WHERE v.entity_type = 'festival' AND v.entity_id = f.id AND v.field_name = 'deadline'
+      LIMIT 1
+    ), 'unverified') AS deadline_verification_status,
+    COALESCE((
+      SELECT v.status FROM data_verifications v
+      WHERE v.entity_type = 'festival' AND v.entity_id = f.id AND v.field_name = 'filmfreeway_url'
+      LIMIT 1
+    ), 'unverified') AS submission_url_status
+    FROM festivals f WHERE f.status = ?`;
   const params: unknown[] = [status];
 
   if (category)      { query += ` AND category = ?`;      params.push(category); }
@@ -784,7 +1214,20 @@ app.get('/api/festivals', async (c) => {
 });
 
 app.get('/api/festivals/:id', async (c) => {
-  const festival = await c.env.DB.prepare(`SELECT * FROM festivals WHERE id = ?`)
+  const festival = await c.env.DB.prepare(`
+    SELECT f.*,
+      COALESCE((
+        SELECT v.status FROM data_verifications v
+        WHERE v.entity_type = 'festival' AND v.entity_id = f.id AND v.field_name = 'deadline'
+        LIMIT 1
+      ), 'unverified') AS deadline_verification_status,
+      COALESCE((
+        SELECT v.status FROM data_verifications v
+        WHERE v.entity_type = 'festival' AND v.entity_id = f.id AND v.field_name = 'filmfreeway_url'
+        LIMIT 1
+      ), 'unverified') AS submission_url_status
+    FROM festivals f WHERE f.id = ?
+  `)
     .bind(c.req.param('id')).first();
   if (!festival) return c.json({ error: 'Not found' }, 404);
 

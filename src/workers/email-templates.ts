@@ -111,13 +111,13 @@ export function buildDeadlineCheckEmail(
     .join('');
 
   const updatedSection = updated.length > 0 ? `
-    <h3 style="color:#276749;">✅ ĐÃ TÌM THẤY DEADLINE (${updated.length}):</h3>
+    <h3 style="color:#276749;">🔎 DEADLINE CHỜ XÁC MINH (${updated.length}):</h3>
     <table style="width:100%;border-collapse:collapse;">
       <thead>
         <tr style="background:#2d3748;color:white;">
           <th style="padding:8px;text-align:left;">Festival</th>
-          <th style="padding:8px;text-align:left;">Deadline</th>
-          <th style="padding:8px;text-align:left;">Website</th>
+          <th style="padding:8px;text-align:left;">Ngày đề xuất</th>
+          <th style="padding:8px;text-align:left;">Nguồn cần kiểm tra</th>
         </tr>
       </thead>
       <tbody>${updatedRows}</tbody>
@@ -137,7 +137,7 @@ export function buildDeadlineCheckEmail(
       ${pendingSection}
       <hr/>
       <p style="color:#718096;font-size:12px;">
-        💡 Để check thủ công: Nhấn Claude "Check deadline update festival"<br/>
+        💡 Các ngày tìm thấy chưa được ghi vào dữ liệu chính. Hãy duyệt trong Data Review.<br/>
         ⚙️ Script chạy tự động mỗi 2 tuần (thứ 2, 9h sáng)
       </p>
       ${FOOTER}

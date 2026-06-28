@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { apiFetch } from '../apiFetch';
+import { DataReview } from './DataReview';
 
 interface User {
   id: number;
@@ -219,6 +220,7 @@ function Empty({ text }: { text: string }) {
 }
 
 export function UserManager({ onClose }: { onClose: () => void }) {
+  const [section, setSection] = useState<'users' | 'reviews'>('users');
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<number | null>(null);
@@ -276,7 +278,7 @@ export function UserManager({ onClose }: { onClose: () => void }) {
       >
         <div style={{
           background: '#fff', borderRadius: 12,
-          width: '100%', maxWidth: 680,
+          width: '100%', maxWidth: section === 'reviews' ? 920 : 680,
           maxHeight: '85vh', overflow: 'hidden',
           display: 'flex', flexDirection: 'column',
           boxShadow: '0 8px 40px rgba(0,0,0,0.2)',
@@ -287,7 +289,7 @@ export function UserManager({ onClose }: { onClose: () => void }) {
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}>
             <div>
-              <h2 style={{ margin: 0, fontSize: 18, color: '#1a202c' }}>👥 Quản lý User</h2>
+              <h2 style={{ margin: 0, fontSize: 18, color: '#1a202c' }}>⚙️ Quản trị IFT / IFT Admin</h2>
               <p style={{ margin: '2px 0 0', fontSize: 13, color: '#718096' }}>
                 {users.length} user · {users.filter(u => u.status === 'pending').length} đang chờ duyệt
               </p>
@@ -295,9 +297,26 @@ export function UserManager({ onClose }: { onClose: () => void }) {
             <button onClick={onClose} style={closeBtn}>✕</button>
           </div>
 
+          <div style={{ display: 'flex', gap: 4, padding: '8px 24px', borderBottom: '1px solid #edf2f7' }}>
+            <button
+              onClick={() => setSection('users')}
+              style={{ ...managerTab, color: section === 'users' ? '#004aad' : '#718096', borderBottomColor: section === 'users' ? '#004aad' : 'transparent' }}
+            >
+              Thành viên / Users
+            </button>
+            <button
+              onClick={() => setSection('reviews')}
+              style={{ ...managerTab, color: section === 'reviews' ? '#004aad' : '#718096', borderBottomColor: section === 'reviews' ? '#004aad' : 'transparent' }}
+            >
+              Duyệt dữ liệu / Data Review
+            </button>
+          </div>
+
           {/* Body */}
           <div style={{ overflowY: 'auto', flex: 1, padding: '12px 24px 24px' }}>
-            {loading ? (
+            {section === 'reviews' ? (
+              <DataReview />
+            ) : loading ? (
               <div style={{ textAlign: 'center', padding: 48, color: '#718096' }}>Đang tải…</div>
             ) : users.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 48, color: '#718096' }}>Không có user nào.</div>
@@ -424,6 +443,11 @@ const closeBtn: React.CSSProperties = {
   background: 'none', border: 'none', cursor: 'pointer',
   fontSize: 18, color: '#718096', padding: 4,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
+};
+
+const managerTab: React.CSSProperties = {
+  border: 'none', borderBottom: '2px solid transparent', background: 'none',
+  padding: '7px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 800,
 };
 
 const badge: React.CSSProperties = {

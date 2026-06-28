@@ -139,6 +139,46 @@ CREATE TABLE IF NOT EXISTS rss_cache (
   UNIQUE(feed_url, item_guid)
 );
 
+-- Data awaiting automated/manual verification. AI and web-search results must
+-- pass through this table before they can change production records.
+CREATE TABLE IF NOT EXISTS data_review_queue (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  review_type TEXT NOT NULL,
+  entity_type TEXT NOT NULL DEFAULT 'festival',
+  entity_id INTEGER,
+  source_url TEXT,
+  source_guid TEXT,
+  source_title TEXT,
+  candidate_json TEXT NOT NULL,
+  ai_model TEXT,
+  ai_confidence REAL,
+  reason TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  reviewed_at DATETIME,
+  reviewer_id INTEGER REFERENCES users(id),
+  UNIQUE(review_type, source_guid)
+);
+
+CREATE TABLE IF NOT EXISTS data_verifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  entity_type TEXT NOT NULL,
+  entity_id INTEGER NOT NULL,
+  field_name TEXT NOT NULL,
+  field_value TEXT,
+  status TEXT NOT NULL DEFAULT 'unverified',
+  source_url TEXT,
+  evidence TEXT,
+  access_method TEXT,
+  http_status INTEGER,
+  final_url TEXT,
+  checked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  checked_by INTEGER REFERENCES users(id),
+  metadata TEXT,
+  UNIQUE(entity_type, entity_id, field_name)
+);
+
 -- ============================================================
 -- MODULE 5: My Films (Submission Tracker)
 -- ============================================================
@@ -189,6 +229,9 @@ CREATE INDEX IF NOT EXISTS idx_funds_deadline ON funds_grants(deadline);
 CREATE INDEX IF NOT EXISTS idx_education_deadline ON education_residency(deadline);
 CREATE INDEX IF NOT EXISTS idx_monitor_active ON monitor_commands(is_active);
 CREATE INDEX IF NOT EXISTS idx_rss_processed ON rss_cache(processed);
+CREATE INDEX IF NOT EXISTS idx_data_review_status ON data_review_queue(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_data_review_entity ON data_review_queue(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_data_verification_status ON data_verifications(entity_type, status, checked_at);
 CREATE INDEX IF NOT EXISTS idx_submissions_film ON submissions(film_id);
 CREATE INDEX IF NOT EXISTS idx_submissions_status ON submissions(status);
 CREATE INDEX IF NOT EXISTS idx_films_status ON films(status);

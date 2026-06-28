@@ -945,6 +945,18 @@ export function FestivalList({ t, isOwner, isLoggedIn, onOpenProfile, defaultOpe
                       {t.festivals.regularDeadline}: <DeadlineBadge deadline={f.regular_deadline} t={t} />
                     </div>
                   )}
+                  {(f.early_deadline || f.regular_deadline) && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 800, borderRadius: 12, padding: '2px 7px',
+                      color: f.deadline_verification_status === 'verified' ? '#276749' : '#975a16',
+                      background: f.deadline_verification_status === 'verified' ? '#f0fff4' : '#fffff0',
+                      border: `1px solid ${f.deadline_verification_status === 'verified' ? '#c6f6d5' : '#fefcbf'}`,
+                    }}>
+                      {f.deadline_verification_status === 'verified'
+                        ? '✓ Đã xác minh / Verified'
+                        : '⚠ Chưa xác minh / Unverified'}
+                    </span>
+                  )}
                   {(f.entry_fee_early != null || f.entry_fee_regular != null) && (
                     <div style={{ fontSize: 12, color: '#718096' }}>
                       {t.festivals.entryFee}:{' '}

@@ -1,6 +1,15 @@
 // IFT Scraper — RSS + HTML
 // Cloudflare Workers runtime only
 
+import {
+  analyzeFestivalCandidate,
+  canAutoPublishCandidate,
+  queueFestivalCandidate,
+  verifyPublicUrl,
+  type DeadlineCandidate,
+  type IngestionAnalysis,
+} from './data-quality';
+
 // ============================================================
 // Types
 // ============================================================
@@ -62,6 +71,24 @@ const COUNTRY_TAG_MAP: Record<string, string> = {
 
 const ASIAN_FILM_FESTIVALS_FEED = 'https://asianfilmfestivals.com/feed';
 const CINEUROPA_RSS_FEED = 'https://cineuropa.org/rss/?lang=en';
+
+async function prepareAutoPublish(
+  parsed: ParsedFestival,
+  analysis: IngestionAnalysis,
+): Promise<ParsedFestival | null> {
+  if (!canAutoPublishCandidate(parsed, analysis)) return null;
+  const candidateUrl = analysis.submission_url ?? analysis.official_url;
+  if (!candidateUrl) return null;
+  const linkCheck = await verifyPublicUrl(candidateUrl);
+  if (!linkCheck.reachable) return null;
+
+  const isFilmFreeway = candidateUrl.toLowerCase().includes('filmfreeway.com/');
+  return {
+    ...parsed,
+    website: analysis.official_url ?? (!isFilmFreeway ? candidateUrl : parsed.website),
+    filmfreeway_url: isFilmFreeway ? candidateUrl : parsed.filmfreeway_url,
+  };
+}
 
 // ============================================================
 // Low-level XML / HTML helpers
@@ -538,15 +565,20 @@ export async function searchFestivalDeadlineWithAI(
   festivalName: string,
   country: string | null,
   apiKey: string
-): Promise<string | null> {
+): Promise<DeadlineCandidate | null> {
   type Msg = { role: 'user' | 'assistant'; content: unknown };
   const year = new Date().getFullYear();
 
   const messages: Msg[] = [{
     role: 'user',
-    content: `Search for the ${year} or ${year + 1} film submission deadline for "${festivalName}" film festival${country ? ` (${country})` : ''}. Return ONLY this JSON, no explanation:
-{"deadline":null,"deadline_early":null}
-Rules: use ISO format YYYY-MM-DD, null if not found. "deadline" = regular deadline, "deadline_early" = early bird if available.`,
+    content: `Search for the ${year} or ${year + 1} film submission deadlines for "${festivalName}" film festival${country ? ` (${country})` : ''}. Return ONLY this JSON, no explanation:
+{"deadline_early":null,"deadline_regular":null,"source_url":null,"evidence":null,"confidence":0}
+Rules:
+- Dates use ISO format YYYY-MM-DD and null when not found.
+- Keep early-bird and regular/final deadlines separate.
+- source_url must be the exact page supporting the dates.
+- evidence must be a short exact excerpt from that page.
+- confidence is 0 to 1. Never guess a date or URL.`,
   }];
 
   for (let i = 0; i < 3; i++) {
@@ -585,10 +617,25 @@ Rules: use ISO format YYYY-MM-DD, null if not found. "deadline" = regular deadli
         const jsonMatch = text.match(/\{[\s\S]*?\}/);
         if (!jsonMatch) return null;
         const p = JSON.parse(jsonMatch[0]);
-        // Prefer early deadline, fall back to regular
-        const date = p.deadline_early || p.deadline;
-        if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
-        return null;
+        const early = typeof p.deadline_early === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.deadline_early)
+          ? p.deadline_early : null;
+        const regular = typeof p.deadline_regular === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.deadline_regular)
+          ? p.deadline_regular : null;
+        if (!early && !regular) return null;
+        let sourceUrl: string | null = null;
+        if (typeof p.source_url === 'string') {
+          try {
+            const parsedUrl = new URL(p.source_url);
+            if (parsedUrl.protocol === 'https:' || parsedUrl.protocol === 'http:') sourceUrl = parsedUrl.toString();
+          } catch { /* invalid source URL remains null */ }
+        }
+        return {
+          deadline_early: early,
+          deadline_regular: regular,
+          source_url: sourceUrl,
+          evidence: typeof p.evidence === 'string' ? p.evidence.slice(0, 800) : null,
+          confidence: typeof p.confidence === 'number' ? Math.min(1, Math.max(0, p.confidence)) : 0,
+        };
       }
 
       if (data.stop_reason === 'pause_turn') {
@@ -866,16 +913,49 @@ export async function saveFestivals(
  * Fetch asianfilmfestivals.com RSS, parse call-for-entry items,
  * and persist new festivals to D1. Called daily at 08:00 UTC.
  */
-export async function scrapeAsianFilmFestivals(db: D1Database, apiKey?: string): Promise<ScrapeResult> {
+export async function scrapeAsianFilmFestivals(
+  db: D1Database,
+  apiKey?: string,
+  ai?: Ai,
+  autoPublish = false,
+): Promise<ScrapeResult> {
   const items = await fetchRssFeed(ASIAN_FILM_FESTIVALS_FEED);
   console.log(`[Scraper] Fetched ${items.length} RSS items from asianfilmfestivals.com`);
 
   const entries: Array<{ festival: ParsedFestival; content: string }> = [];
   for (const item of items) {
+    const cached = await db.prepare(
+      `SELECT id FROM rss_cache WHERE feed_url = ? AND item_guid = ?`
+    ).bind(ASIAN_FILM_FESTIVALS_FEED, item.guid).first();
+    if (cached) continue;
+
     const parsed = parseFestivalItem(item);
-    if (parsed) entries.push({ festival: parsed, content: item.content });
+    if (!parsed) continue;
+
+    if (!ai) {
+      await queueFestivalCandidate(
+        db, ASIAN_FILM_FESTIVALS_FEED, item, parsed, null,
+        'Workers AI unavailable; candidate was not published.',
+      );
+      continue;
+    }
+
+    try {
+      const analysis = await analyzeFestivalCandidate(ai, item, parsed);
+      const publishable = autoPublish ? await prepareAutoPublish(parsed, analysis) : null;
+      if (publishable) {
+        entries.push({ festival: publishable, content: item.content });
+      } else {
+        await queueFestivalCandidate(db, ASIAN_FILM_FESTIVALS_FEED, item, parsed, analysis);
+      }
+    } catch (error) {
+      await queueFestivalCandidate(
+        db, ASIAN_FILM_FESTIVALS_FEED, item, parsed, null,
+        error instanceof Error ? error.message : 'AI analysis failed',
+      );
+    }
   }
-  console.log(`[Scraper] Parsed ${entries.length} call-for-entry items`);
+  console.log(`[Scraper] ${entries.length} candidates approved for automatic publishing`);
 
   // AI fee enrichment for festivals where regex found nothing
   if (apiKey) await enrichFeesWithAI(entries, apiKey);
@@ -963,16 +1043,49 @@ export function parseCineuropaItem(item: RssItem): ParsedFestival | null {
  * Fetch Cineuropa RSS, parse call-for-entry items,
  * and persist new European festivals to D1.
  */
-export async function scrapeCineuropaRss(db: D1Database, apiKey?: string): Promise<ScrapeResult> {
+export async function scrapeCineuropaRss(
+  db: D1Database,
+  apiKey?: string,
+  ai?: Ai,
+  autoPublish = false,
+): Promise<ScrapeResult> {
   const items = await fetchRssFeed(CINEUROPA_RSS_FEED);
   console.log(`[Scraper] Fetched ${items.length} RSS items from cineuropa.org`);
 
   const entries: Array<{ festival: ParsedFestival; content: string }> = [];
   for (const item of items) {
+    const cached = await db.prepare(
+      `SELECT id FROM rss_cache WHERE feed_url = ? AND item_guid = ?`
+    ).bind(CINEUROPA_RSS_FEED, item.guid).first();
+    if (cached) continue;
+
     const parsed = parseCineuropaItem(item);
-    if (parsed) entries.push({ festival: parsed, content: item.content });
+    if (!parsed) continue;
+
+    if (!ai) {
+      await queueFestivalCandidate(
+        db, CINEUROPA_RSS_FEED, item, parsed, null,
+        'Workers AI unavailable; candidate was not published.',
+      );
+      continue;
+    }
+
+    try {
+      const analysis = await analyzeFestivalCandidate(ai, item, parsed);
+      const publishable = autoPublish ? await prepareAutoPublish(parsed, analysis) : null;
+      if (publishable) {
+        entries.push({ festival: publishable, content: item.content });
+      } else {
+        await queueFestivalCandidate(db, CINEUROPA_RSS_FEED, item, parsed, analysis);
+      }
+    } catch (error) {
+      await queueFestivalCandidate(
+        db, CINEUROPA_RSS_FEED, item, parsed, null,
+        error instanceof Error ? error.message : 'AI analysis failed',
+      );
+    }
   }
-  console.log(`[Scraper] Parsed ${entries.length} call-for-entry items from Cineuropa`);
+  console.log(`[Scraper] ${entries.length} Cineuropa candidates approved for automatic publishing`);
 
   if (apiKey) await enrichFeesWithAI(entries, apiKey);
 

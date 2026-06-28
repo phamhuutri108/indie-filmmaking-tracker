@@ -100,6 +100,8 @@ export interface Festival {
   prestige_signals?: string;  // JSON string array
   genres?: string;            // JSON string array
   sections?: FestivalSection[];
+  deadline_verification_status?: 'verified' | 'unverified' | 'blocked' | 'broken' | 'unknown';
+  submission_url_status?: 'verified' | 'unverified' | 'blocked' | 'broken' | 'unknown';
 }
 
 export interface Fund {

@@ -5,6 +5,7 @@ import { scrapeAsianFilmFestivals, scrapeCineuropaRss, searchFestivalDeadlineWit
 import { scrapeFunds } from './fund-scraper';
 import { batchAnalyzeFestivals, batchAnalyzeFunds, batchAnalyzeEducation } from './ai-scraper';
 import { buildBundledAlertEmail, buildDigestEmail, buildErrorAlertEmail, buildDeadlineCheckEmail, type AlertItem, type DigestItem, type DeadlineCheckItem } from './email-templates';
+import { queueDeadlineCandidate } from './data-quality';
 
 export interface Env {
   DB: D1Database;
@@ -12,6 +13,8 @@ export interface Env {
   ALERT_EMAIL: string;
   APP_URL: string;
   ANTHROPIC_API_KEY: string;
+  AI: Ai;
+  AI_AUTO_PUBLISH?: string;
 }
 
 export async function handleCron(env: Env): Promise<void> {
@@ -88,7 +91,12 @@ async function runFundScraper(env: Env): Promise<void> {
 
 async function runCineuropa(env: Env): Promise<void> {
   try {
-    const result = await scrapeCineuropaRss(env.DB, env.ANTHROPIC_API_KEY);
+    const result = await scrapeCineuropaRss(
+      env.DB,
+      env.ANTHROPIC_API_KEY,
+      env.AI,
+      env.AI_AUTO_PUBLISH === 'true',
+    );
     console.log(`[Cron] Cineuropa — saved: ${result.saved}, skipped: ${result.skipped}`);
     if (result.errors.length) console.error('[Cron] Cineuropa errors:', result.errors);
   } catch (err) {
@@ -98,7 +106,12 @@ async function runCineuropa(env: Env): Promise<void> {
 
 async function runScraper(env: Env): Promise<void> {
   try {
-    const result = await scrapeAsianFilmFestivals(env.DB, env.ANTHROPIC_API_KEY);
+    const result = await scrapeAsianFilmFestivals(
+      env.DB,
+      env.ANTHROPIC_API_KEY,
+      env.AI,
+      env.AI_AUTO_PUBLISH === 'true',
+    );
     console.log(`[Cron] Scraper — saved: ${result.saved}, skipped: ${result.skipped}`);
     if (result.errors.length) {
       console.error('[Cron] Scraper errors:', result.errors);
@@ -253,7 +266,7 @@ async function sendDailyDigest(env: Env): Promise<void> {
   }
 }
 
-export async function checkPendingDeadlines(env: Env): Promise<{ updated: number; pending: number }> {
+export async function checkPendingDeadlines(env: Env): Promise<{ updated: number; queued: number; pending: number }> {
   if (!env.ANTHROPIC_API_KEY) {
     console.warn('[Cron] No ANTHROPIC_API_KEY, skipping pending deadline check.');
     return { updated: 0, pending: 0 };
@@ -298,18 +311,19 @@ export async function checkPendingDeadlines(env: Env): Promise<{ updated: number
     const batch = monitors.slice(i, i + 3);
     await Promise.allSettled(batch.map(async (m) => {
       try {
-        const deadline = await searchFestivalDeadlineWithAI(m.name, m.country, env.ANTHROPIC_API_KEY);
-        if (deadline) {
-          // Update the deadline in the appropriate table
-          if (m.ref_table === 'festivals') {
-            await env.DB.prepare(`UPDATE festivals SET regular_deadline = ? WHERE id = ?`).bind(deadline, m.ref_id).run();
-          } else if (m.ref_table === 'funds_grants') {
-            await env.DB.prepare(`UPDATE funds_grants SET deadline = ? WHERE id = ?`).bind(deadline, m.ref_id).run();
-          } else if (m.ref_table === 'education_residency') {
-            await env.DB.prepare(`UPDATE education_residency SET deadline = ? WHERE id = ?`).bind(deadline, m.ref_id).run();
-          }
-          updatedItems.push({ name: m.name, refTable: m.ref_table, refId: m.ref_id, found: true, deadline, website: m.website ?? undefined });
-          console.log(`[Cron] Deadline found for "${m.name}": ${deadline}`);
+        const candidate = await searchFestivalDeadlineWithAI(m.name, m.country, env.ANTHROPIC_API_KEY);
+        if (candidate) {
+          await queueDeadlineCandidate(env.DB, m.ref_table, m.ref_id, m.name, candidate);
+          const proposedDate = candidate.deadline_regular ?? candidate.deadline_early ?? undefined;
+          updatedItems.push({
+            name: m.name,
+            refTable: m.ref_table,
+            refId: m.ref_id,
+            found: true,
+            deadline: proposedDate,
+            website: candidate.source_url ?? m.website ?? undefined,
+          });
+          console.log(`[Cron] Deadline candidate queued for review: "${m.name}" (${proposedDate})`);
         } else {
           pendingItems.push({ name: m.name, refTable: m.ref_table, refId: m.ref_id, found: false, website: m.website ?? undefined });
         }
@@ -323,12 +337,12 @@ export async function checkPendingDeadlines(env: Env): Promise<{ updated: number
   const ts = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false });
   await sendEmail(env, {
     to: env.ALERT_EMAIL,
-    subject: `🎬 Festival Deadline Check — ${updatedItems.length} updated, ${pendingItems.length} pending`,
+    subject: `🎬 Festival Deadline Check — ${updatedItems.length} awaiting review, ${pendingItems.length} pending`,
     html: buildDeadlineCheckEmail(updatedItems, pendingItems, ts),
   });
 
-  console.log(`[Cron] Deadline check done — updated: ${updatedItems.length}, pending: ${pendingItems.length}`);
-  return { updated: updatedItems.length, pending: pendingItems.length };
+  console.log(`[Cron] Deadline check done — queued: ${updatedItems.length}, pending: ${pendingItems.length}`);
+  return { updated: 0, queued: updatedItems.length, pending: pendingItems.length };
 }
 
 async function sendEmail(

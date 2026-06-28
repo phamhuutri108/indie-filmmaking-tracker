@@ -309,7 +309,7 @@ export function FundList({ t, isOwner, isLoggedIn }: { t: ReturnType<typeof useI
 
   const refresh = () => {
     setRefreshing(true);
-    fetch(`${API_BASE}/funds/scrape`)
+    apiFetch(`${API_BASE}/funds/scrape`)
       .then(() => load())
       .catch(() => {})
       .finally(() => setRefreshing(false));

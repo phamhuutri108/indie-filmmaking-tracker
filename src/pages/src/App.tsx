@@ -229,12 +229,8 @@ export default function App() {
 
             {/* Manage users (owner only) */}
             {isOwner && (
-              <button
-                onClick={() => setShowUsers(true)}
-                title="Manage users"
-                style={headerBtn}
-              >
-                Users
+              <button onClick={() => setShowUsers(true)} title="IFT Admin" style={headerBtn}>
+                Admin
               </button>
             )}
 
